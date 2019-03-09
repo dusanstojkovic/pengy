@@ -7,9 +7,12 @@ import logging
 import paho.mqtt.client
 import requests
 
+import pandas as pd
+import numpy as np
+
 # logging config
 logging.basicConfig(
-	level=logging.DEBUG,
+	level=logging.WARNING,
 	format='%(asctime)s [%(levelname)-7s] #%(lineno)03d (%(threadName)-10s) %(message)s',
 )
 
@@ -29,7 +32,7 @@ luftdaten_software_version = config['luftdaten']['software_version']
 
 sch = sched.scheduler(time.time, time.sleep)
 
-aq_data = {}
+aq = {}
 
 def postLuftdaten(sensor_id, sensor_pin, values):
 	try:
@@ -42,8 +45,7 @@ def postLuftdaten(sensor_id, sensor_pin, values):
 			headers = {
 				"X-PIN":    str(sensor_pin),
 				"X-Sensor": sensor_id,
-			})
-		# 'https://api-rrd.madavi.de/data.php'
+			})		
 	except requests.ConnectionError as e:
 		logging.error('Luftdaten * Post - Connection error: %s' % str(e))
 	except Exception as e:
@@ -54,13 +56,22 @@ def postLuftdaten(sensor_id, sensor_pin, values):
 
 def sendLuftdaten():
 	try:
-		logging.debug('Luftdaten * Send')
-
-		for uid in aq_data:
-			(tem, hum, rpm, fpm) = aq_data[uid]		
+		for uid in aq:
+			aq[uid] = aq[uid].append(pd.DataFrame(
+				data = {"fpm": [np.nan], 
+						"rpm": [np.nan],
+						"tem": [np.nan],
+						"hum": [np.nan]},
+				index = [datetime.datetime.now()]))
+			
+			aq_ = aq[uid].rolling('30min').median()
+			fpm = round(aq_.fpm.iat[-1],0)
+			rpm = round(aq_.rpm.iat[-1],0) 
+			tem = round(aq_.tem.iat[-1],1)
+			hum = round(aq_.hum.iat[-1],0)
 			
 			logging.debug('Luftdaten * Send - Sensor %s : RPM = %s   FPM = %s   t = %s   RH = %s' % (uid, rpm, fpm, tem, hum))
-	
+
 			postLuftdaten('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
 			postLuftdaten('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
 
@@ -103,7 +114,17 @@ def ttn_on_message(client, userdata, message):
 			logging.error("MQTT (TTN) * On Message - Error parsing payload: %s - %s" % (payload, str(ex)))
 			return
 
-		aq_data[uid] = (tem, hum, rpm, fpm)
+		if not uid in aq:
+			aq[uid] = pd.DataFrame(data = {"fpm": [], "rpm": [], "tem": [], "hum": []}, index = [])
+
+		aq[uid] = aq[uid].append(pd.DataFrame(
+				data = {"fpm": [fpm], 
+						"rpm": [rpm],
+						"tem": [tem],
+						"hum": [hum]},
+				index = [datetime.datetime.now()]))
+
+		aq[uid] = aq[uid].last('24h')
 
 		if is_retry:
 			return
@@ -125,8 +146,6 @@ def ttn_on_log(client, userdata, level, string):
 logging.info('Pengy-Luftdaten started')
 
 try:
-	# connect to TTN mqtt broker
-	# https://www.thethingsnetwork.org/docs/applications/mqtt/quick-start.html
 	ttn_mqtt_client = paho.mqtt.client.Client(client_id=ttn_mqtt_client_id, clean_session=False, userdata=None)
 
 	ttn_mqtt_client.on_connect = ttn_on_connect

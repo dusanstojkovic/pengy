@@ -3,6 +3,7 @@ FROM python:3.7
 RUN pip install requests
 RUN pip install paho-mqtt
 RUN pip install PyYAML
+RUN pip install pandas
 
 WORKDIR /app
 
