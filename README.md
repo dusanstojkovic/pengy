@@ -14,8 +14,9 @@ The sensors on the nodes (*SDS012* and *DHT22*) are measuring the relevant air p
 ## Content
 
 * In the folder [firmware](firmware/), you can find the latest firmaware for a Pengy node
-* Integration with *The Things Network* is in folder [ttn](ttn/)
-* Python script to push the data to *Luftdaten* platform is in folder [luftdaten](luftdaten/)
+* Integration with *The Things Network* is in folder [ttn](integration/ttn/)
+* Python script to push the data to *Luftdaten* platform is in folder [luftdaten](integration/luftdaten/)
+* Python script to push the data to *Pulse.Eco* platform is in folder [pulse.eco](integration/pulse.eco/)
 * Supporting pictures, drawings and diagrams you can find under [media](media/) folder
 * Some additional documentation can be found under [docs](firmware/docs/)
 
@@ -23,7 +24,9 @@ The sensors on the nodes (*SDS012* and *DHT22*) are measuring the relevant air p
 
 More information regarding LoRaWAN and The Things Network can be found on their sites [LoRa Alliance](https://lora-alliance.org/about-lorawan) and [The Things Network](https://www.thethingsnetwork.org/).
 
-More information about Citizen Science project Luftdaten can be found here: [https://luftdaten.info/](https://luftdaten.info/)
+More information about Citizen Science project **Luftdaten** can be found here: [https://luftdaten.info/](https://luftdaten.info/)
+
+More information about crowdsourcing platform **Pulse.Eco** can be found here: [https://pulse.eco/](https://pulse.eco/)
 
 
 ## Notice

@@ -1,0 +1,14 @@
+FROM python:3.7
+
+RUN pip install requests
+RUN pip install paho-mqtt
+RUN pip install PyYAML
+RUN pip install pandas
+
+WORKDIR /app
+
+COPY pengy-pulse.eco.py      ./pengy-pulse.eco.py
+COPY pengy-pulse.eco.yml     ./pengy-pulse.eco.yml
+COPY thethings-network.pem   ./thethings-network.pem
+
+CMD [ "python", "-u", "/app/pengy-pulse.eco.py" ]
