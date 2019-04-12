@@ -1,0 +1,10 @@
+pulse_eco:
+  software_version: 'pengy v0.2'
+
+
+ttn_mqtt:
+  server: eu.thethings.network
+  port: 8883
+  username: pengy
+  password: ttn-account-v2.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  
