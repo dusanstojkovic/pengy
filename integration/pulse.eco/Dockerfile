@@ -1,9 +1,10 @@
-FROM python:3.7
+FROM python:3.8-alpine
 
 RUN pip install requests
 RUN pip install paho-mqtt
 RUN pip install PyYAML
 RUN pip install pandas
+RUN pip install python-logstash-async
 
 WORKDIR /app
 
