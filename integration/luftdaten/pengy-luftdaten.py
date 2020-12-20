@@ -13,12 +13,12 @@ import numpy as np
 # logging config
 logging.basicConfig(
 	level=logging.WARNING,
-	format='%(asctime)s [%(levelname)-7s] #%(lineno)03d (%(threadName)-10s) %(message)s',
+	format='%(asctime)s [%(levelname)-8s] #%(lineno)03d / %(funcName)s / (%(threadName)-10s) %(message)s',
 )
 
 # reading configuration
 with open("pengy-luftdaten.yml", 'r') as ymlfile:
-	config = yaml.load(ymlfile)
+	config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 # ttn config
 ttn_mqtt_broker = config['ttn_mqtt']['server']
@@ -33,10 +33,11 @@ luftdaten_software_version = config['luftdaten']['software_version']
 sch = sched.scheduler(time.time, time.sleep)
 
 aq = {}
+ver = {}
 
 def postLuftdaten(sensor_id, sensor_pin, values):
 	try:
-		r = requests.post('https://api.luftdaten.info/v1/push-sensor-data/',
+		r = requests.post('https://api.sensor.community/v1/push-sensor-data/',
 			json = {
 				"software_version": luftdaten_software_version,
 				#"sampling_rate":10000,
@@ -58,22 +59,29 @@ def sendLuftdaten():
 	try:
 		for uid in aq:
 			aq[uid] = aq[uid].append(pd.DataFrame(
-				data = {"fpm": [np.nan], 
-						"rpm": [np.nan],
+				data = {"rpm": [np.nan],
+						"fpm": [np.nan], 
 						"tem": [np.nan],
-						"hum": [np.nan]},
+						"hum": [np.nan],
+						"pre": [np.nan]},
 				index = [datetime.datetime.now()]))
 			
 			aq_ = aq[uid].rolling('30min').median()
+			rpm = round(aq_.rpm.iat[-1],0)
 			fpm = round(aq_.fpm.iat[-1],0)
-			rpm = round(aq_.rpm.iat[-1],0) 
 			tem = round(aq_.tem.iat[-1],1)
 			hum = round(aq_.hum.iat[-1],0)
+			pre = round(aq_.pre.iat[-1],0)
 			
-			logging.debug('Luftdaten * Send - Sensor %s : RPM = %s   FPM = %s   t = %s   RH = %s' % (uid, rpm, fpm, tem, hum))
+			logging.debug('Luftdaten * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
 
-			postLuftdaten('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
-			postLuftdaten('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
+			if ver[uid] == '1.0':
+				postLuftdaten('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
+				postLuftdaten('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
+			
+			if ver[uid] == '1.5':
+				postLuftdaten('TTN-'+uid, 1, { "P1": rpm, "P2": fpm } )
+				postLuftdaten('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
 
 	except Exception as e:
 		logging.error('Luftdaten * Send - Error: %s' % str(e))
@@ -84,13 +92,13 @@ def sendLuftdaten():
 
 
 def ttn_on_connect(client, userdata, flags, rc):
-	logging.info("MQTT (TTN) * On Connect - Result: " + paho.mqtt.client.connack_string(rc))
+	logging.info('MQTT (TTN) * On Connect - Result: ' + paho.mqtt.client.connack_string(rc))
 	ttn_mqtt_client.subscribe("pengy/devices/+/up", 0)
 
 
 def ttn_on_disconnect(client, userdata, rc):
 	if rc != 0:
-		logging.warning("MQTT (TTN) * On Disconnect - unexpected disconnection")
+		logging.warning('MQTT (TTN) * On Disconnect - unexpected disconnection')
 
 def ttn_on_message(client, userdata, message):
 	try:
@@ -102,26 +110,30 @@ def ttn_on_message(client, userdata, message):
 			
 			uid = data["dev_id"]
 
-			tem  = data["payload_fields"]["Temperature"]
-			hum  = data["payload_fields"]["Humidity"]
-			rpm  = data["payload_fields"]["RPM"]
-			fpm  = data["payload_fields"]["FPM"]
-			# aqi  = data["payload_fields"]["EAQI"]
+			tem  = data["payload_fields"].get("Temperature") # v1  v1.5
+			hum  = data["payload_fields"].get("Humidity")    # v1  v1.5
+			pre  = data["payload_fields"].get("Pressure")    #     v1.5
+			
+			rpm  = data["payload_fields"].get("RPM")         # v1  v1.5
+			fpm  = data["payload_fields"].get("FPM")         # v1  v1.5
+
+			aqi  = data["payload_fields"].get("EAQI", "Unknown")
+
+			version = data["payload_fields"].get("Version")
 
 			is_retry = data.get("is_retry", False)
 
 		except Exception as ex:
-			logging.error("MQTT (TTN) * On Message - Error parsing payload: %s - %s" % (payload, str(ex)))
+			logging.error('MQTT (TTN) * On Message - Error parsing payload: %s - %s' % (payload, str(ex)))
 			return
 
 		if not uid in aq:
 			aq[uid] = pd.DataFrame(data = {"fpm": [], "rpm": [], "tem": [], "hum": []}, index = [])
+			ver[uid] = version
 
 		aq[uid] = aq[uid].append(pd.DataFrame(
-				data = {"fpm": [fpm], 
-						"rpm": [rpm],
-						"tem": [tem],
-						"hum": [hum]},
+				data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
+						"rpm" : [rpm or np.nan], "fpm" : [fpm or np.nan]},
 				index = [datetime.datetime.now()]))
 
 		aq[uid] = aq[uid].last('24h')
@@ -130,7 +142,7 @@ def ttn_on_message(client, userdata, message):
 			return
 
 	except Exception as ex:
-		logging.error("MQTT (TTN) * On Message - Error : %s" % str(ex))
+		logging.error('MQTT (TTN) * On Message - Error : %s' % str(ex))
 
 	return
 
@@ -174,6 +186,6 @@ try:
 	ttn_mqtt_client.disconnect()
 
 except Exception as ex:
-	logging.error("Pengy-Luftdaten error: %s" % str(ex))
+	logging.error('Pengy-Luftdaten error: %s' % str(ex))
 
 logging.error('Pengy-Luftdaten finished')
