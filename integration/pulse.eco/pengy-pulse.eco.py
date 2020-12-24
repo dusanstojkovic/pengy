@@ -30,6 +30,9 @@ ttn_mqtt_client_id = 'pengy-pulse.eco'
 # pulse.eco config
 pulse_eco_software_version = config['pulse_eco']['software_version']
 
+# sensor mapping
+device_keys = config["device_keys"]
+
 sch = sched.scheduler(time.time, time.sleep)
 
 aq = {}
@@ -66,8 +69,13 @@ def sendPulseEco():
 
 			logging.debug('Pulse.Eco * Send - Sensor %s : RPM = %s μg/m³   FPM = %s μg/m³   t = %s °C   RH = %s %%   p = %s hPa   MASL = %s m   NO2 = %s ppm   CO = %s ppm   NH3 = %s ppm   Noise = %s dBa' % (uid, rpm, fpm, tem, hum, pre, alt, no2, co, nh3, noi))
 
+			if uid in device_keys:
+				device_key = device_keys[uid]
+			else:
+				device_key = uid # fallback mapping
+
 			try:
-				params = { "devAddr": uid, "version": 20001 }
+				params = { "devAddr": device_key, "version": 20001 }
 			
 				# temperature, humitity, pressure, altidute
 				if not np.isnan(tem): params["temperature"] = tem
@@ -83,9 +91,9 @@ def sendPulseEco():
 				if not np.isnan(noi): params["noise_dba"] = noi
 
 				# gas
-				if not np.isnan(no2): params["no2_ppb"] = no2
-				if not np.isnan(co): params["co_ppb"]  = co
-				if not np.isnan(nh3): params["nh3_ppb"] = nh3
+				if not np.isnan(no2): params["no2_ppb"] = 1000.0 * no2 
+				if not np.isnan(co): params["co_ppb"]  = 1000.0 * co
+				if not np.isnan(nh3): params["nh3_ppb"] = 1000.0 * nh3
 
 				r = requests.get('https://pulse.eco/wifipoint/store', params)
 
@@ -118,9 +126,6 @@ def ttn_on_message(client, userdata, message):
 			data = json.loads(payload)							 
 			
 			uid = data["dev_id"]
-
-			if (uid == '69bafab7'):
-				uid = '4AT9C800'
 
 			alt  = data["metadata"]["altitude"]
 			
@@ -171,7 +176,8 @@ def ttn_on_subscribe(client, userdata, mid, granted_qos):
 
 
 def ttn_on_log(client, userdata, level, string):
-	logging.log(level, 'MQTT (TTN) * Log - %s' % str(string))
+	if level >= logging.INFO:
+		logging.log(level, 'MQTT (TTN) * Log - %s' % str(string))
 
 
 logging.info('Pengy-Pulse.Eco started')
