@@ -48,9 +48,9 @@ def postSensorCommunity(sensor_id, sensor_pin, values):
 				"X-Sensor": sensor_id,
 			})		
 	except requests.ConnectionError as e:
-		logging.error('SensorCommunity * Post - Connection error: %s' % str(e))
+		logging.error('Sensor.Community * Post - Connection error: %s' % str(e))
 	except Exception as e:
-		logging.error('SensorCommunity * Post - Error: %s' % str(e))
+		logging.error('Sensor.Community * Post - Error: %s' % str(e))
 
 	return
 
@@ -73,7 +73,7 @@ def sendSensorCommunity():
 			hum = round(aq_.hum.iat[-1],0)
 			pre = round(aq_.pre.iat[-1],0)
 			
-			logging.debug('SensorCommunity * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
+			logging.debug('Sensor.Community * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
 
 			if ver[uid] == '1.0':
 				postSensorCommunity('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
@@ -84,9 +84,9 @@ def sendSensorCommunity():
 				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
 
 	except Exception as e:
-		logging.error('SensorCommunity * Send - Error: %s' % str(e))
+		logging.error('Sensor.Community * Send - Error: %s' % str(e))
 	
-	sch.enter(275, 1, SensorCommunity)
+	sch.enter(275, 1, sendSensorCommunity)
 
 	return
 
@@ -156,7 +156,7 @@ def ttn_on_log(client, userdata, level, string):
 		logging.log(level, 'MQTT (TTN) * Log - %s' % str(string))
 
 
-logging.info('Pengy-SensorCommunity started')
+logging.info('Pengy-Sensor.Community started')
 
 try:
 	ttn_mqtt_client = paho.mqtt.client.Client(client_id=ttn_mqtt_client_id, clean_session=False, userdata=None)
@@ -187,6 +187,6 @@ try:
 	ttn_mqtt_client.disconnect()
 
 except Exception as ex:
-	logging.error('Pengy-SensorCommunity error: %s' % str(ex))
+	logging.error('Pengy-Sensor.Community error: %s' % str(ex))
 
-logging.error('Pengy-SensorCommunity finished')
+logging.error('Pengy-Sensor.Community finished')
