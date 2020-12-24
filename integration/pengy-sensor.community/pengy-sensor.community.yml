@@ -1,5 +1,5 @@
-luftdaten:
-  software_version: 'pengy v0.2'
+sensor_community:
+  software_version: 'pengy v1.5'
 
 
 ttn_mqtt:

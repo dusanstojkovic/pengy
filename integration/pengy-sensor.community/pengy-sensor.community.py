@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 # reading configuration
-with open("pengy-luftdaten.yml", 'r') as ymlfile:
+with open("pengy-sensor.community.yml", 'r') as ymlfile:
 	config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
 # ttn config
@@ -25,21 +25,21 @@ ttn_mqtt_broker = config['ttn_mqtt']['server']
 ttn_mqtt_broker_port = config['ttn_mqtt']['port']
 ttn_mqtt_username = config['ttn_mqtt']['username']
 ttn_mqtt_password = config['ttn_mqtt']['password']
-ttn_mqtt_client_id = 'pengy-lufdaten'
+ttn_mqtt_client_id = 'pengy-sensor.community'
 
-# luftdaten config
-luftdaten_software_version = config['luftdaten']['software_version']
+# sensor_community config
+sensor_community_software_version = config['sensor_community']['software_version']
 
 sch = sched.scheduler(time.time, time.sleep)
 
 aq = {}
 ver = {}
 
-def postLuftdaten(sensor_id, sensor_pin, values):
+def postSensorCommunity(sensor_id, sensor_pin, values):
 	try:
 		r = requests.post('https://api.sensor.community/v1/push-sensor-data/',
 			json = {
-				"software_version": luftdaten_software_version,
+				"software_version": sensor_community_software_version,
 				#"sampling_rate":10000,
 				"sensordatavalues": [{"value_type": key, "value": val} for key, val in values.items()],
 			},
@@ -48,14 +48,14 @@ def postLuftdaten(sensor_id, sensor_pin, values):
 				"X-Sensor": sensor_id,
 			})		
 	except requests.ConnectionError as e:
-		logging.error('Luftdaten * Post - Connection error: %s' % str(e))
+		logging.error('SensorCommunity * Post - Connection error: %s' % str(e))
 	except Exception as e:
-		logging.error('Luftdaten * Post - Error: %s' % str(e))
+		logging.error('SensorCommunity * Post - Error: %s' % str(e))
 
 	return
 
 
-def sendLuftdaten():
+def sendSensorCommunity():
 	try:
 		for uid in aq:
 			aq[uid] = aq[uid].append(pd.DataFrame(
@@ -73,20 +73,20 @@ def sendLuftdaten():
 			hum = round(aq_.hum.iat[-1],0)
 			pre = round(aq_.pre.iat[-1],0)
 			
-			logging.debug('Luftdaten * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
+			logging.debug('SensorCommunity * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
 
 			if ver[uid] == '1.0':
-				postLuftdaten('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
-				postLuftdaten('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
+				postSensorCommunity('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
+				postSensorCommunity('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
 			
 			if ver[uid] == '1.5':
-				postLuftdaten('TTN-'+uid, 1, { "P1": rpm, "P2": fpm } )
-				postLuftdaten('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
+				postSensorCommunity('TTN-'+uid, 1, { "P1": rpm, "P2": fpm } )
+				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
 
 	except Exception as e:
-		logging.error('Luftdaten * Send - Error: %s' % str(e))
+		logging.error('SensorCommunity * Send - Error: %s' % str(e))
 	
-	sch.enter(275, 1, sendLuftdaten)
+	sch.enter(275, 1, SensorCommunity)
 
 	return
 
@@ -152,10 +152,11 @@ def ttn_on_subscribe(client, userdata, mid, granted_qos):
 
 
 def ttn_on_log(client, userdata, level, string):
-	logging.log(level, 'MQTT (TTN) * Log - %s' % str(string))
+	if level >= logging.INFO:
+		logging.log(level, 'MQTT (TTN) * Log - %s' % str(string))
 
 
-logging.info('Pengy-Luftdaten started')
+logging.info('Pengy-SensorCommunity started')
 
 try:
 	ttn_mqtt_client = paho.mqtt.client.Client(client_id=ttn_mqtt_client_id, clean_session=False, userdata=None)
@@ -176,7 +177,7 @@ try:
 
 	ttn_mqtt_client.loop_start()
 
-	sch.enter(15, 1, sendLuftdaten)
+	sch.enter(15, 1, sendSensorCommunity)
 	
 	while True:
 		sch.run(False)
@@ -186,6 +187,6 @@ try:
 	ttn_mqtt_client.disconnect()
 
 except Exception as ex:
-	logging.error('Pengy-Luftdaten error: %s' % str(ex))
+	logging.error('Pengy-SensorCommunity error: %s' % str(ex))
 
-logging.error('Pengy-Luftdaten finished')
+logging.error('Pengy-SensorCommunity finished')
