@@ -2,7 +2,7 @@ function Decoder(bytes, port)
 {
   var decoded = {};
       
-  if (port == 1)
+  if (port == 1 || port == 2)
   {
     var hum = bytes[0]<<8 | bytes[1]; hum = 0.1 * hum; hum = Number(hum.toFixed(1));
     var tem = bytes[2]<<24>>16 | bytes[3]; tem = 0.1 * tem; tem = Number(tem.toFixed(1));
@@ -11,7 +11,6 @@ function Decoder(bytes, port)
     
     if (hum < 0.0 || hum > 100.0) hum = null;
     if (tem < -50.0 || tem > 100.0 ) tem = null;
-
     if (rpm < 0 || rpm > 5000) rpm = null;
     if (fpm < 0 || fpm > 5000) fpm = null;
     
@@ -25,11 +24,32 @@ function Decoder(bytes, port)
     decoded.Humidity = hum;
     decoded.Temperature = tem;
     decoded.FPM = fpm;  
-    decoded.RPM = rpm;  
+    decoded.RPM = rpm;
 
     decoded.EAQI = eaqi;
     
-    return decoded;
+    decoded.Version = "1.0";
   }
 
+  if (port == 2)
+  {
+    var pre = bytes[8]<<8 | bytes[9]; pre = Number(pre.toFixed(0));
+    var co = bytes[10]<<8 | bytes[11]; co = 1.0 * co; co = Number(co.toFixed(0));
+    var nh3 = bytes[12]<<8 | bytes[13]; nh3 = 1.0 * nh3; nh3 = Number(nh3.toFixed(0));
+    var no2 = bytes[14]<<8 | bytes[15]; no2 = 0.01 * no2; no2 = Number(no2.toFixed(2));
+
+    if (pre < 0.0 || pre > 1000000.0) pre = null;
+    if (co < 0.0 || co > 10000) co = null;
+    if (nh3 < 0.0 || nh3 > 10000) nh3 = null;
+    if (no2 < 0.0 || no2 > 10000) no2 = null;
+
+    decoded.Pressure = pre;
+    decoded.CO = co;
+    decoded.NH3 = nh3;
+    decoded.NO2 = no2;
+    
+    decoded.Version = "1.5";
+  }
+
+  return decoded;
 }
