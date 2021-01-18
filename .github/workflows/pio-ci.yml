@@ -9,19 +9,34 @@ on:
 
 jobs:
   build:
+    runs-on: ubuntu-latest  
     name: Build firmwares
-    runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v1
+    
+    - name: Checking out repository
+      uses: actions/checkout@v2
+    
+    - name: Cache pip
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Cache PlatformIO
+      uses: actions/cache@v2
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}    
+
     - name: Set up Python
-      uses: actions/setup-python@v1
-    - name: Install dependencies
+      uses: actions/setup-python@v2
+
+    - name: Install PlatformIO and dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install platformio
+        pip install --upgrade platformio
+
     - name: Run PlatformIO
       working-directory: firmware
-      run: |
-        pwd
-        platformio ci --lib="." --project-conf platformio.ini src/*
+      run: pio run -e v1.0 -e v1.1 -e v1.5-acq -e v1.5
