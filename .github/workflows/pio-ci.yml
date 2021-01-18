@@ -22,4 +22,6 @@ jobs:
         pip install platformio
     - name: Run PlatformIO
       working-directory: firmware
-      run: platformio ci --lib="." --project-conf platformio.ini src/*
+      run: |
+        pwd
+        platformio ci --lib="." --project-conf platformio.ini src/*
