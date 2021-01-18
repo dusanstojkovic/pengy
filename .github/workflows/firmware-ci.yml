@@ -1,21 +1,21 @@
-name: PlatformIO CI
+name: Firmware CI
 
 on:
   push:
     branches:
     - master
     paths:
-      - 'firmware/*'
+      - '.github/workflows/firmware-ci.yml'
+      - 'firmware/**'
 
 jobs:
   build:
     runs-on: ubuntu-latest  
     name: Build firmwares
+
     steps:
-    
     - name: Checking out repository
       uses: actions/checkout@v2
-    
     - name: Cache pip
       uses: actions/cache@v2
       with:
