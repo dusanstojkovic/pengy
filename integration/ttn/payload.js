@@ -37,6 +37,7 @@ function Decoder(bytes, port)
     var co = bytes[10]<<8 | bytes[11]; co = 1.0 * co; co = Number(co.toFixed(0));
     var nh3 = bytes[12]<<8 | bytes[13]; nh3 = 1.0 * nh3; nh3 = Number(nh3.toFixed(0));
     var no2 = bytes[14]<<8 | bytes[15]; no2 = 0.01 * no2; no2 = Number(no2.toFixed(2));
+	var noise = bytes[16]<<8 | bytes[17]; noise = 0.01 * noise; noise = Number(noise.toFixed(2));
 
     if (pre < 0.0 || pre > 1000000.0) pre = null;
     if (co < 0.0 || co > 10000) co = null;
@@ -47,6 +48,7 @@ function Decoder(bytes, port)
     decoded.CO = co;
     decoded.NH3 = nh3;
     decoded.NO2 = no2;
+	  decoded.Noise = noise;
     
     decoded.Version = "1.5";
   }
