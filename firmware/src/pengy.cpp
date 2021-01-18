@@ -251,7 +251,6 @@ void loop()
     LOG << F("[") << loop_ts << F(" millis / ") << loops <<  F(" loops] ") << endl;
 
     if (loops % 20 == 1) // every 20 minutes - request readout
-    //if (loops % 10 == 1) // Daniel
     {
         // Ambiental noise
         readNoise();
@@ -290,7 +289,6 @@ void loop()
         handleNoise();
 
     if (loops % 20 == 2) // every 20 minutes - send
-    //if (loops % 10 == 2) // Daniel
     {
         uint16_t datum;
 		// port 1 - Humidity (0,1), Temperature (2,3), PM10 (4,5), PM25 (6,7)
