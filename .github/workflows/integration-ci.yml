@@ -1,0 +1,23 @@
+name: Integrations CI
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/integration-ci.yml'
+      - 'integration/**'    
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+    name: Build and push docker images
+
+    steps:
+    - name: Checking out repository
+      uses: actions/checkout@v2
+    - name: Build the Pulse.Eco integration Docker image
+      run: docker build --tag pulse.eco:$(date +%s) integration/pulse.eco/.
+    - name: Build the Sensor.Community integration Docker image
+      run: docker build --tag sensor.community:$(date +%s) integration/sensor.community/.
