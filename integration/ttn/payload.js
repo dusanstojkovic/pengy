@@ -37,7 +37,7 @@ function Decoder(bytes, port)
     var co = bytes[10]<<8 | bytes[11]; co = 1.0 * co; co = Number(co.toFixed(0));
     var nh3 = bytes[12]<<8 | bytes[13]; nh3 = 1.0 * nh3; nh3 = Number(nh3.toFixed(0));
     var no2 = bytes[14]<<8 | bytes[15]; no2 = 0.01 * no2; no2 = Number(no2.toFixed(2));
-	var noise = bytes[16]<<8 | bytes[17]; noise = 0.01 * noise; noise = Number(noise.toFixed(2));
+    var noise = bytes[16]<<8 | bytes[17]; noise = 0.01 * noise; noise = Number(noise.toFixed(2));    
 
     if (pre < 0.0 || pre > 1000000.0) pre = null;
     if (co < 0.0 || co > 10000) co = null;
@@ -48,9 +48,35 @@ function Decoder(bytes, port)
     decoded.CO = co;
     decoded.NH3 = nh3;
     decoded.NO2 = no2;
-	  decoded.Noise = noise;
+    decoded.Noise = noise;
     
     decoded.Version = "1.5";
+  }
+  
+  if (port == 3)
+  {
+    var pm1  = bytes[0]<<8 | bytes[1]; pm1  = 0.1 *  pm1;  pm1 = Number( pm1.toFixed(0));
+    var pm25 = bytes[2]<<8 | bytes[3]; pm25 = 0.1 * pm25; pm25 = Number(pm25.toFixed(0));
+    var pm10 = bytes[4]<<8 | bytes[5]; pm10 = 0.1 * pm10; pm10 = Number(pm10.toFixed(0));
+
+    if (pm1 < 0 || pm1 > 5000) pm1 = null;
+    if (pm25 < 0 || pm25 > 5000) pm25 = null;
+    if (pm10 < 0 || pm10 > 5000) pm10 = null;
+
+    var eaqi="NaN";
+    if (pm25 >= 50 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eaqi = "Very poor" } else
+    if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eaqi = "Poor" } else
+    if (pm25 >= 20 && pm25 <  25 || pm10 >=  35 && pm10 <   50) { eaqi = "Moderate" } else
+    if (pm25 >= 10 && pm25 <  20 || pm10 >=  20 && pm10 <   35) { eaqi = "Fair" } else
+    if (pm25 >   0 && pm25 <  10 || pm10 >    0 && pm10 <   20) { eaqi = "Good" } else { eaqi = "Unknown" };
+  
+    decoded.UPM = pm1;  
+    decoded.FPM = pm25;
+    decoded.RPM = pm10;
+
+    decoded.EAQI = eaqi;
+    
+    decoded.Version = "2.0";
   }
 
   return decoded;

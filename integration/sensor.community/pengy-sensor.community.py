@@ -4,21 +4,40 @@ import sched
 import yaml
 import json
 import logging
+from logstash_async.handler import AsynchronousLogstashHandler
+from logstash_async.handler import LogstashFormatter
 import paho.mqtt.client
 import requests
-
 import pandas as pd
 import numpy as np
 
 # logging config
 logging.basicConfig(
-	level=logging.WARNING,
+	level=logging.INFO, #os.environ.get("LOG_LEVEL", "WARNING")
 	format='%(asctime)s [%(levelname)-8s] #%(lineno)03d / %(funcName)s / (%(threadName)-10s) %(message)s',
 )
 
 # reading configuration
 with open("pengy-sensor.community.yml", 'r') as ymlfile:
 	config = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+# remote logging set-up
+log = logging.getLogger("stash")
+log.setLevel(logging.INFO) #os.environ.get("LOGSTASH_LEVEL", "WARNING")
+handler = AsynchronousLogstashHandler(
+    host=config['logstash']['host'],
+    port=config['logstash']['port'],
+	username=config['logstash']['username'],
+	password=config['logstash']['password'],
+    ssl_enable=False, # True
+    ssl_verify=False,
+    database_path='log-stash.db')
+formatter = LogstashFormatter(
+	extra={
+		'application': "pengy",
+		'environment': "live"})
+handler.setFormatter(formatter)
+log.addHandler(handler)
 
 # ttn config
 ttn_mqtt_broker = config['ttn_mqtt']['server']
@@ -48,9 +67,9 @@ def postSensorCommunity(sensor_id, sensor_pin, values):
 				"X-Sensor": sensor_id,
 			})		
 	except requests.ConnectionError as e:
-		logging.error('Sensor.Community * Post - Connection error: %s' % str(e))
+		log.error('Sensor.Community * Post - Connection error: %s' % str(e), exc_info=True)
 	except Exception as e:
-		logging.error('Sensor.Community * Post - Error: %s' % str(e))
+		log.error('Sensor.Community * Post - Error: %s' % str(e), exc_info=True)
 
 	return
 
@@ -73,18 +92,18 @@ def sendSensorCommunity():
 			hum = round(aq_.hum.iat[-1],0)
 			pre = round(aq_.pre.iat[-1],0)
 			
-			logging.debug('Sensor.Community * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
+			log.info('Sensor.Community * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
 
 			if ver[uid] == '1.0':
 				postSensorCommunity('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
 				postSensorCommunity('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
 			
-			if ver[uid] == '1.5':
+			if ver[uid] == '1.5' or ver[uid] == '2.0':
 				postSensorCommunity('TTN-'+uid, 1, { "P1": rpm, "P2": fpm } )
 				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
-
+			
 	except Exception as e:
-		logging.error('Sensor.Community * Send - Error: %s' % str(e))
+		log.error('Sensor.Community * Send - Error: %s' % str(e), exc_info=True)
 	
 	sch.enter(275, 1, sendSensorCommunity)
 
@@ -92,17 +111,17 @@ def sendSensorCommunity():
 
 
 def ttn_on_connect(client, userdata, flags, rc):
-	logging.info('MQTT (TTN) * On Connect - Result: ' + paho.mqtt.client.connack_string(rc))
+	log.info('MQTT (TTN) * On Connect - Result: ' + paho.mqtt.client.connack_string(rc))
 	ttn_mqtt_client.subscribe("pengy/devices/+/up", 0)
 
 
 def ttn_on_disconnect(client, userdata, rc):
 	if rc != 0:
-		logging.warning('MQTT (TTN) * On Disconnect - unexpected disconnection')
+		log.warning('MQTT (TTN) * On Disconnect - unexpected disconnection')
 
 def ttn_on_message(client, userdata, message):
 	try:
-		logging.debug('MQTT (TTN) * On Message - Topic "' + message.topic + '"')
+		log.debug('MQTT (TTN) * On Message - Topic "' + message.topic + '"')
 
 		try:
 			payload = message.payload.decode('utf8')
@@ -110,12 +129,12 @@ def ttn_on_message(client, userdata, message):
 			
 			uid = data["dev_id"]
 
-			tem  = data["payload_fields"].get("Temperature") # v1  v1.5
-			hum  = data["payload_fields"].get("Humidity")    # v1  v1.5
-			pre  = data["payload_fields"].get("Pressure")    #     v1.5
+			tem  = data["payload_fields"].get("Temperature") # v1  v1.5  v2.0
+			hum  = data["payload_fields"].get("Humidity")    # v1  v1.5  v2.0
+			pre  = data["payload_fields"].get("Pressure")    #     v1.5  v2.0
 			
-			rpm  = data["payload_fields"].get("RPM")         # v1  v1.5
-			fpm  = data["payload_fields"].get("FPM")         # v1  v1.5
+			rpm  = data["payload_fields"].get("RPM")         # v1  v1.5  v2.0
+			fpm  = data["payload_fields"].get("FPM")         # v1  v1.5  v2.0
 
 			aqi  = data["payload_fields"].get("EAQI", "Unknown")
 
@@ -124,7 +143,7 @@ def ttn_on_message(client, userdata, message):
 			is_retry = data.get("is_retry", False)
 
 		except Exception as ex:
-			logging.error('MQTT (TTN) * On Message - Error parsing payload: %s - %s' % (payload, str(ex)))
+			log.error('MQTT (TTN) * On Message - Error parsing payload: %s - %s' % (payload, str(ex)), exc_info=True)
 			return
 
 		if not uid in aq:
@@ -142,21 +161,21 @@ def ttn_on_message(client, userdata, message):
 			return
 
 	except Exception as ex:
-		logging.error('MQTT (TTN) * On Message - Error : %s' % str(ex))
+		log.error('MQTT (TTN) * On Message - Error : %s' % str(ex), exc_info=True)
 
 	return
 
 
 def ttn_on_subscribe(client, userdata, mid, granted_qos):
-	logging.info('MQTT (TTN) * On Subscribe - MId=' + str(mid) + ' QoS=' + str(granted_qos))
+	log.info('MQTT (TTN) * On Subscribe - MId=' + str(mid) + ' QoS=' + str(granted_qos))
 
 
 def ttn_on_log(client, userdata, level, string):
 	if level >= logging.INFO:
-		logging.log(level, 'MQTT (TTN) * Log - %s' % str(string))
+		log.log(level, 'MQTT (TTN) * Log - %s' % str(string))
 
 
-logging.info('Pengy-Sensor.Community started')
+log.info('Pengy-Sensor.Community started')
 
 try:
 	ttn_mqtt_client = paho.mqtt.client.Client(client_id=ttn_mqtt_client_id, clean_session=False, userdata=None)
@@ -187,6 +206,6 @@ try:
 	ttn_mqtt_client.disconnect()
 
 except Exception as ex:
-	logging.error('Pengy-Sensor.Community error: %s' % str(ex))
+	log.error('Pengy-Sensor.Community error: %s' % str(ex), exc_info=True)
 
-logging.error('Pengy-Sensor.Community finished')
+log.error('Pengy-Sensor.Community finished')

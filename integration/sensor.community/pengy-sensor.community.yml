@@ -1,8 +1,14 @@
 sensor_community:
-  software_version: 'pengy v1.5'
+  software_version: 'pengy v2.0'
 
 ttn_mqtt:
   server: eu.thethings.network
   port: 8883
   username: pengy
   password: ttn-account-v2.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+logstash:
+  host: 45.129.180.166
+  port: 5000
+  username: "?"
+  password: "?"  

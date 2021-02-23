@@ -1,5 +1,5 @@
 pulse_eco:
-  software_version: 'pengy v1.5'
+  software_version: 'pengy v2.0'
 
 ttn_mqtt:
   server: eu.thethings.network
@@ -9,3 +9,4 @@ ttn_mqtt:
 
 device_keys:
   69bafab7: 4AT9C800
+  17b71925: F0FMJD2X
