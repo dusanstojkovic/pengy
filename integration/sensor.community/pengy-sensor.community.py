@@ -76,6 +76,8 @@ def postSensorCommunity(sensor_id, sensor_pin, values):
 
 def sendSensorCommunity():
 	try:
+		naned_uids = []
+
 		for uid in aq:
 			aq[uid] = aq[uid].append(pd.DataFrame(
 				data = {"rpm": [np.nan],
@@ -101,7 +103,15 @@ def sendSensorCommunity():
 			if ver[uid] == '1.5' or ver[uid] == '2.0':
 				postSensorCommunity('TTN-'+uid, 1, { "P1": rpm, "P2": fpm } )
 				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
-			
+
+			if np.isnan(rpm) and np.isnan(fpm) and np.isnan(tem) and np.isnan(hum) and np.isnan(pre):
+				naned_uids.append(uid)
+
+		for naned_uid in naned_uids:
+			aq.pop(naned_uid, None)
+			ver.pop(naned_uid, None)
+			log.warning('Sensor.Community * Send - Sensor %s - removing due to the lack of data' % (naned_uid))
+
 	except Exception as e:
 		log.error('Sensor.Community * Send - Error: %s' % str(e), exc_info=True)
 	
@@ -129,6 +139,8 @@ def ttn_on_message(client, userdata, message):
 			
 			uid = data["dev_id"]
 
+			version = data["payload_fields"].get("Version")
+			
 			tem  = data["payload_fields"].get("Temperature") # v1  v1.5  v2.0
 			hum  = data["payload_fields"].get("Humidity")    # v1  v1.5  v2.0
 			pre  = data["payload_fields"].get("Pressure")    #     v1.5  v2.0
@@ -137,8 +149,6 @@ def ttn_on_message(client, userdata, message):
 			fpm  = data["payload_fields"].get("FPM")         # v1  v1.5  v2.0
 
 			aqi  = data["payload_fields"].get("EAQI", "Unknown")
-
-			version = data["payload_fields"].get("Version")
 
 			is_retry = data.get("is_retry", False)
 

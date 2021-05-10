@@ -61,6 +61,8 @@ def sendPulseEco():
 	sch.enter(900, 1, sendPulseEco)
 
 	try:
+		naned_uids = []
+
 		for uid in aq:
 			aq[uid] = aq[uid].append(pd.DataFrame(
 				data = {"pm1": [np.nan],
@@ -121,8 +123,16 @@ def sendPulseEco():
 
 				log.debug('Pulse.Eco * GET : %s' % r.url)
 
+				if (np.isnan(tem) and np.isnan(hum) and np.isnan(pre) and
+				    np.isnan(pm1) and np.isnan(pm25) and np.isnan(pm10) and
+					np.isnan(noi)): naned_uids.append(uid)
+
 			except requests.ConnectionError as e:
 				log.error('Pulse.Eco * Send - Connection error: %s' % str(e), exc_info=True)
+
+		for naned_uid in naned_uids:
+			aq.pop(naned_uid, None)
+			log.warning('Pulse.Eco * Send - Sensor %s - removing due to the lack of data' % (naned_uid))
 
 	except Exception as e:
 		log.error('Pulse.Eco * Send - Error: %s' % str(e), exc_info=True)
