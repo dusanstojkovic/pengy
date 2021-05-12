@@ -313,9 +313,9 @@ void normalizeTHP()
 
 void normalizePM()
 {
-    pm10 = CAL_RPM_1 * pm10 + CAL_RPM_0;
-    pm1 = CAL_FPM_1 * pm1 + CAL_FPM_0;
-    pm25 = CAL_FPM_1 * pm25 + CAL_FPM_0;
+    pm10 = CAL_PM10_1 * pm10 + CAL_PM10_0;
+    pm1 = CAL_PM1_1 * pm1 + CAL_PM1_0;
+    pm25 = CAL_PM25_1 * pm25 + CAL_PM25_0;
 }
 
 

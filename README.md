@@ -1,4 +1,7 @@
 # Air Quality Monitoring
+[![Firmwares](https://github.com/dusanstojkovic/pengy/actions/workflows/firmware-ci.yml/badge.svg)](https://github.com/dusanstojkovic/pengy/actions/workflows/firmware-ci.yml)
+[![Integrations](https://github.com/dusanstojkovic/pengy/actions/workflows/integration-ci.yml/badge.svg)](https://github.com/dusanstojkovic/pengy/actions/workflows/integration-ci.yml)
+
 ![](media/pengy.png)
 
 **Pengy** is the system for monitoring of the air quality parameters.
