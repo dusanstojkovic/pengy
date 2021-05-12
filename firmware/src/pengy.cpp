@@ -1,85 +1,84 @@
 /*
-  Pengy v1.5 - Air Quality Parameters acquisition
+  Pengy v2.0 - Air Quality Parameters acquisition
 
   This firmware acquires:
-     - PM2.5 and PM10 concetration from SDS011 sensor
-	 - [external pengy-acqusition.cpp] temperature, humidity and preassure from BME680 sensor
-     - [external pengy-acqusition.cpp] CO, NH3 and NO2 from MiCS-6814 sensor
-     - [external pengy-acqusition.cpp] sound level from LM386 enabled electret microphone (https://www.waveshare.com/sound-sensor.htm)
-     
+     - PM2.5 and PM10 concetration from Sensirion SPS30 sensor
+     - temperature, humidity and preassure from BME680 sensor
+     - sound level from LM386 enabled electret microphone (https://www.waveshare.com/sound-sensor.htm)
+
   then accumulates, agregates data and sends it every hour using LoRaWAN 
   via The Things Network to Thingy.IO system.
 
   Copyright (c) 2021 Dusan Stojkovic
 */
 
-#include <Wire.h>
-#include <SPI.h>
-#include <lmic.h>
-#include <hal/hal.h>
+#include "Arduino.h"
+#include "Wire.h"
+
+#include "LoRaWan_APP.h"
+#include "lorawan.hpp"
+
 #include <Streaming.h>
 
-#include <SdsDustSensor.h>
-SoftwareSerial sdss(0,1);
-SdsDustSensor sds(Serial1);
+//
+#include <SPS30.h>
 
-double fpmCummulative=0;
-double rpmCummulative=0;
+double pm1Cummulative=0, pm25Cummulative=0, pm10Cummulative=0;
 int countAQCummulative=0;
 
-float fpm;
-float rpm;
+float pm1, pm25, pm10;
+SPS30 sps30;
 
-float noise;
+#include <Adafruit_Sensor.h>
+#include "Adafruit_BME280.h"
+Adafruit_BME280 bme;
 
-float concetrationCO;
-float concetrationNH3;
-float concetrationNO2;
+long temperatureCummulative=0;
+long humidityCummulative=0;
+long pressureCummulative = 0;
+int countTHPCummulative=0;
 
 float temperature;
 float humidity;
 float pressure;
 
-#include <pengy-acqusition.hpp>
+double soundValueCummulative=0;
+int countSoundValueCummulative = 0;
+double soundValue=0;
 
 //
+
+float noise;
+
+// Eyes
+#include "CubeCell_NeoPixel.h"
+CubeCell_NeoPixel eyes(1, RGB, NEO_GRB + NEO_KHZ800);
+
 #define DEBUG true
 #define LOG if(DEBUG)Serial
 
-#ifdef _NAME_
-static const uint8_t NWKSKEY[16] = NWK_S_KEY;
-static const uint8_t APPSKEY[16] = APP_S_KEY;
-static const uint32_t DEVADDR = DEV_ADDR;
-#elif
-#define _NAME_ "Pengy-???"
-static const uint8_t NWKSKEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-static const uint8_t APPSKEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-static const uint32_t DEVADDR = 0x00000000;
-#endif
-
-void os_getArtEui (u1_t* buf) { }
-void os_getDevEui (u1_t* buf) { }
-void os_getDevKey (u1_t* buf) { }
-
-const lmic_pinmap lmic_pins = 
-{
-    .nss = LORA_SPI_SS,
-    .rxtx = LMIC_UNUSED_PIN,
-    .rst = LORA_RST,
-    .dio = {LORA_DIO0, LORA_DIO1, LMIC_UNUSED_PIN},
-};
+uint8_t nwkSKey[] = NWK_S_KEY;
+uint8_t appSKey[] = APP_S_KEY;
+uint32_t devAddr = DEV_ADDR;
 
 unsigned int loops = 0;
-uint8_t data[18];
+
+bool send = false;
+uint8_t data[6];
+
 
 void wait(unsigned long d)
 {
+    delay(d);
+    return;
+
     unsigned long b_ = micros();
     unsigned long e_ = d;
 
     while (e_ > 0)
     {
-        yield();
+        //os_runloop_once();
+        //yield();
         while ( e_ > 0 && (micros() - b_) >= 1000)
         {
             e_--;
@@ -88,42 +87,181 @@ void wait(unsigned long d)
     }
 }
 
-void onEvent (ev_t ev)
-{ 
-    LOG << F("[") << millis() << F("] LoRa - ") << ev << endl; 
+// LED lights
+void lightInit()
+{
+    pinMode(Vext,OUTPUT);
+    digitalWrite(Vext,LOW);
+    eyes.begin(); eyes.clear(); eyes.show();
+}
+
+void lightMeasuringStart()
+{
+    // make rainbow effect
+}
+
+void lightMeasuringStop()
+{
+    eyes.begin(); eyes.clear(); eyes.show();
+}
+
+void lightSetupBegin()
+{
+    eyes.setPixelColor(0, eyes.Color(255,0,0)); eyes.show(); delay(200);
+    eyes.setPixelColor(0, eyes.Color(0,255,0)); eyes.show(); delay(200);
+    eyes.setPixelColor(0, eyes.Color(0,0,255)); eyes.show(); delay(200);
+}
+
+void lightSetupEnd()
+{
+    eyes.clear(); eyes.show();    
+}
+
+
+
+// Acquisitionß
+void handleNoise()
+{
+    lightMeasuringStart();
+
+    unsigned long start_ts = millis();
+    while (millis() - start_ts < 7500)
+    {
+        double soundValMin=3.4028235E+38, soundValSubMin=3.4028235E+38, soundValMax=-3.4028235E+38, soundValSubMax= -3.4028235E+38;
+
+        unsigned long sound_ts= millis();
+        while (millis() - sound_ts < 125) // 125ms
+        {
+            int soundVal = 0; for (int i=0; i<3; i++) soundVal += analogRead(GPIO0); soundVal/=4;
+
+            if (soundVal < soundValMin) 
+            {
+                soundValSubMin = soundValMin;
+                soundValMin = soundVal;
+            }
+            else if (soundVal < soundValSubMin)
+                soundValSubMin = soundVal;
+            
+            if (soundVal > soundValMax) 
+            {
+                soundValSubMax = soundValMax;
+                soundValMax = soundVal;
+            }
+            else if (soundVal > soundValSubMax)
+                soundValSubMax = soundVal;
+        }
+        
+        soundValMax = soundValSubMax;
+        soundValMin = soundValSubMin;
+
+        soundValueCummulative += soundValMax - soundValMin; // accumulate envelope
+        countSoundValueCummulative++;
+    }
+
+    LOG << " span Cum = " << soundValueCummulative << "   span Cnt " << countSoundValueCummulative << endl;
+
+    soundValue = soundValueCummulative / countSoundValueCummulative;
+
+    lightMeasuringStop();
+
+    LOG << F("NOISE - ") << F("N=") << soundValue << endl;
+}
+
+void handleTHP()
+{
+    lightMeasuringStart();
+
+    float temperatureMin=3.4028235E+38, temperatureMax=-3.4028235E+38;
+    float humidityMin=3.4028235E+38, humidityMax=-3.4028235E+38;
+    float pressureMin=3.4028235E+38, pressureMax=-3.4028235E+38;
+    int thpCount = 0;
+    
+    for (int l=0; l<7; l++)
+    {
+        float temperature = bme.readTemperature();         // °C
+        float humidity    = bme.readHumidity();            // %RH
+        float pressure    = bme.readPressure() * 0.01f;    // hPa
+        float altitude    = bme.readAltitude(1013.25);     // m
+
+        if (!isnanf(temperature) && !isnanf(humidity) && !isnanf(pressure))
+        {
+            Serial << F(" (") << (l+1) << F(")   t=") << temperature << F("°C   H=") << humidity << F("%RH   p=") << pressure << F(" hPa   MASL=") << altitude << F(" m") << endl;
+
+            temperatureCummulative += temperature;
+            if (temperature < temperatureMin) temperatureMin = temperature;
+            if (temperature > temperatureMax) temperatureMax = temperature;                
+
+            humidityCummulative += humidity;
+            if (humidity < humidityMin) humidityMin = humidity;
+            if (humidity > humidityMax) humidityMax = humidity;                
+
+            pressureCummulative += pressure;
+            if (pressure < pressureMin) pressureMin = pressure;
+            if (pressure > pressureMax) pressureMax = pressure;   
+
+            thpCount++;
+            countTHPCummulative++;
+        }
+        else
+        {
+            LOG << F(" (") << (l+1) << F(")  X") << endl;
+        }
+        wait(1000);
+    }
+    LOG << "t m " << temperatureMin << " M " << temperatureMax << endl;
+    LOG << "H m " << humidityMin << " M " << humidityMax << endl;
+    LOG << "p m " << pressureMin << " M " << pressureMax << endl;
+
+    if (thpCount > 2)
+    {
+        temperatureCummulative = temperatureCummulative - temperatureMax - temperatureMin;
+        humidityCummulative = humidityCummulative - humidityMax - humidityMin;
+        pressureCummulative = pressureCummulative - pressureMax - pressureMin;
+        countTHPCummulative = countTHPCummulative - 2;
+    }
+    
+    temperature = 1.0 * temperatureCummulative / countTHPCummulative;
+    humidity = 1.0 * humidityCummulative / countTHPCummulative;
+    pressure = 0.01 * pressureCummulative / countTHPCummulative;
+
+    lightMeasuringStop();
+
+    //LOG << F("THP - ") << F("t=") << temperature << F("°C - H=") << humidity<< F("%RH - p=") << pressure << F(" hPa") << endl;
 }
 
 void handlePM()
 {
     LOG << F("PM") << endl;
     
-    // LED on
-    digitalWrite(LED_PIN, HIGH);
+    lightMeasuringStart();
 
-    //WorkingStateResult sdsStarting = 
-    sds.wakeup();
-    //LOG << F("  waking up - ") << sdsStarting.statusToString() << endl;
+    bool began = sps30.beginMeasuring();
+    LOG << (began ? F("+"):F("-")) << endl;
 
     wait(30000);
 
-    float fpmMin=3.4028235E+38, fpmMax=-3.4028235E+38;
-    float rpmMin=3.4028235E+38, rpmMax=-3.4028235E+38;
+    float pm1Min=3.4028235E+38, pm1Max=-3.4028235E+38;
+    float pm25Min=3.4028235E+38, pm25Max=-3.4028235E+38;
+    float pm10Min=3.4028235E+38, pm10Max=-3.4028235E+38;
     int pmCount = 0;
 
     for (int l=0; l<7; l++)
     {
-        PmResult pm = sds.queryPm();
-        if (pm.isOk()) 
+        if (sps30.readMeasurement())
         {
-            //LOG << F(" (") << (l+1) << F(")   fPM=") << pm.pm25 << F("   rPM=") << pm.pm10 << endl;
+            LOG <<F(" (") << (l+1) << F(")   PM1.0=") << sps30.massPM1 << F("µg/m³  PM2.5=") << sps30.massPM25 << F("µg/m³  PM4.0=") << sps30.massPM4 << F("µg/m³  PM10=") << sps30.massPM10 << F("µg/m³  size=") << endl;
 
-            fpmCummulative += pm.pm25;
-            if (pm.pm25 < fpmMin) fpmMin = pm.pm25;
-            if (pm.pm25 > fpmMax) fpmMax = pm.pm25;
-            
-            rpmCummulative += pm.pm10;
-            if (pm.pm10 < rpmMin) rpmMin = pm.pm10;
-            if (pm.pm10 > rpmMax) rpmMax = pm.pm10;                
+            pm1Cummulative += sps30.massPM1;
+            if (sps30.massPM1 < pm1Min) pm1Min = sps30.massPM1;
+            if (sps30.massPM1 > pm1Max) pm1Max = sps30.massPM1;
+
+            pm25Cummulative += sps30.massPM25;
+            if (sps30.massPM25 < pm25Min) pm25Min = sps30.massPM25;
+            if (sps30.massPM25 > pm25Max) pm25Max = sps30.massPM25;
+
+            pm10Cummulative += sps30.massPM10;
+            if (sps30.massPM10 < pm10Min) pm10Min = sps30.massPM10;
+            if (sps30.massPM10 > pm10Max) pm10Max = sps30.massPM10;                
 
             pmCount++;
             countAQCummulative++;
@@ -139,27 +277,25 @@ void handlePM()
     
     //LOG << "cnt " << pmCount << endl;
     //LOG << "fpm m " << fpmMin << " M " << fpmMax << endl;
-    //LOG << "rpm m " << rpmMin << " M " << rpmMax << endl;
+    //LOG << "pm10 m " << pm10Min << " M " << pm10Max << endl;
 
     if (pmCount > 2)
     {
-        fpmCummulative = fpmCummulative - fpmMax - fpmMin;
-        rpmCummulative = rpmCummulative - rpmMax - rpmMin;
+        pm1Cummulative = pm1Cummulative - pm1Max - pm1Min;
+        pm25Cummulative = pm25Cummulative - pm25Max - pm25Min;
+        pm10Cummulative = pm10Cummulative - pm10Max - pm10Min;
         countAQCummulative = countAQCummulative - 2;
     }
     
-    fpm = 1.0 * fpmCummulative / countAQCummulative; // 0.7
-    rpm = 1.0 * rpmCummulative / countAQCummulative; // 0.7
+    pm1 = 1.0 * pm1Cummulative / countAQCummulative;
+    pm25 = 1.0 * pm25Cummulative / countAQCummulative;
+    pm10 = 1.0 * pm10Cummulative / countAQCummulative;
     
-    //WorkingStateResult sdsSleeping = 
-    sds.sleep();
-    //LOG << F("   sleeping - ") << (sdsSleeping.statusToString()) << endl;
+    bool stopped = sps30.stopMeasuring();
+    LOG << (stopped ? F("+"):F("-")) << endl;
     
-    // LED off
-    digitalWrite(LED_PIN, LOW);
+    lightMeasuringStop();
 }
-
-
 
 // Normalization
 
@@ -175,112 +311,85 @@ void normalizeTHP()
     pressure    = CAL_PRESSURE_1    * pressure    + CAL_PRESSURE_0;
 }
 
-void normalizeGas()
-{
-    concetrationCO  = CAL_GAS_CO_1  * pow(concetrationCO,  CAL_GAS_CO_0);
-    concetrationNH3 = CAL_GAS_NH3_1 * pow(concetrationNH3, CAL_GAS_NH3_0);
-    concetrationNO2 = CAL_GAS_NO2_1 * pow(concetrationNO2, CAL_GAS_NO2_0);
-}
-
 void normalizePM()
 {
-    rpm = (CAL_RPM_2 * rpm + CAL_RPM_1) * rpm + CAL_RPM_0;
-    fpm = (CAL_FPM_2 * fpm + CAL_FPM_1) * fpm + CAL_FPM_0;
+    pm10 = CAL_RPM_1 * pm10 + CAL_RPM_0;
+    pm1 = CAL_FPM_1 * pm1 + CAL_FPM_0;
+    pm25 = CAL_FPM_1 * pm25 + CAL_FPM_0;
 }
 
 
 // Setup & Loop
 void setup()
 {
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, HIGH);
-  
+
     while (!Serial && millis() < 10000);
     Serial.begin(115200);
+    Wire.begin();
 
     delay(10);
-    LOG << endl << endl  << F(_NAME_) << " - " << F(__DATE__) << " " << F(__TIME__) << endl << "#" << endl << endl;
+    Serial << endl << endl  << F(_NAME_) << " - " << F(__DATE__) << " " << F(__TIME__) << endl << "#" << endl << endl;
 
-    // init air quiality sensor
-    //LOG << F("Setup Air Quality sensor") << endl;
-    sds.begin();
-    //ReportingModeResult modeResult = 
-    sds.setQueryReportingMode();
-    //LOG << F("   Querying : ") << modeResult.statusToString() << endl;
+    // LED init
+    lightInit();
 
-    /*
-    LOG << F("   mode     : ") << sds.queryReportingMode().statusToString() << endl;
-    LOG << F("   firmware : ") << sds.queryFirmwareVersion().statusToString() << endl;
-    LOG << F("   state    : ") << sds.queryWorkingState().statusToString() << endl;
-    LOG << F("   querying : ") << sds.setQueryReportingMode().statusToString() << endl;
-    */
-        
-    // init wire
-    wireSetup();
+    // LED in
+    lightSetupBegin();
 
-    // Init LoRa
-    os_init();
-    LMIC_reset();
+    // air quiality sensor
+    Serial << F("Initializing SPS30 sensor ... ");
+    bool initAQ = sps30.begin(Wire); 
+    Serial << (initAQ ? F("OK") : F("NOK")) << endl;;
 
-    LMIC_setSession (0x1, DEVADDR, (uint8_t*)NWKSKEY, (uint8_t*)APPSKEY);
+    // temperature, humidity, preassure
+    Serial << F("Initializing BME280 sensor ... ");
+    bool initTHP = bme.begin(0x76, &Wire);
+    Serial << (initTHP ? F("OK") : F("NOK")) << endl;;
 
-    LMIC_setupChannel(0, 868100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(1, 868300000, DR_RANGE_MAP(DR_SF12, DR_SF7B), BAND_CENTI);      // g-band
-    LMIC_setupChannel(2, 868500000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(3, 867100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(4, 867300000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(5, 867500000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(6, 867700000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(7, 867900000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
-    LMIC_setupChannel(8, 868800000, DR_RANGE_MAP(DR_FSK,  DR_FSK),  BAND_MILLI);      // g2-band
+    // LoRaWAN
+    boardInitMcu();
+    LoRaWAN.ifskipjoin();
 
-    LMIC_setLinkCheckMode(0);
+    LoRaWAN.init(loraWanClass,loraWanRegion);
+    LoRaWAN.join();
 
-    LMIC.dn2Dr = DR_SF9;
-    LMIC_setDrTxpow(DR_SF7,14);
+    // LED out
+    lightSetupEnd();
 
-    digitalWrite(LED_PIN, LOW);
+    Serial << "#" << endl << endl;
 }
 
 void loop()
 {
-    os_runloop_once();
-
     unsigned long loop_ts = millis();
 
-    LOG << F("[") << loop_ts << F(" millis / ") << loops <<  F(" loops] ") << endl;
+    LOG << F("[") << loop_ts << F(" m / ") << loops <<  F(" l] ") << endl;
 
     if (loops % 20 == 1) // every 20 minutes - request readout
     {
         // Ambiental noise
-        readNoise();
+        handleNoise();
         normalizeNoise();
         LOG << F("NOISE ") << F("v=") << noise << F("dBA") << endl;
 
         // Temperature, Humidity Pressure
-        readTHP();
+        handleTHP();
         normalizeTHP();
         LOG << F("THP ") << F("t=") << temperature << F("°C - H=") << humidity<< F("%RH - p=") << pressure << F(" hPa") << endl;
-        
-        // Gasses
-        readGas();
-        normalizeGas();
-        LOG << F("Gas ") << F("CO=") << concetrationCO << F(" - NH3=") << concetrationNH3<< F(" - NO2=") << concetrationNO2 << endl;
-        
+
         // Particulate metter
         countAQCummulative=0;
-        fpmCummulative=0;
-        rpmCummulative=0;
+        pm1Cummulative=0;
+        pm25Cummulative=0;
+        pm10Cummulative=0;
 
+        handlePM();
         normalizePM();
-        LOG << F("PM ") << F(" fPM=") << fpm << F(" rPM=") << rpm << endl;     
+        LOG << F("PM ") << F(" 1.0=") << pm1 << F("µg/m³  2.5=") << pm25 << F("µg/m³  4.0=") << 0 << F("µg/m³  10=") << pm10 << F("µg/m³") << endl;
     }
 
     if (loops % 5 == 0) // every 5 minutes - sample THP
         handleTHP();
-
-    if (loops % 6 == 0) // every 6 minutes - sample gass
-        handleGas();
 
     if (loops % 5 == 0) // every 10 minutes - sample particulates
         handlePM();
@@ -296,50 +405,51 @@ void loop()
         //          Pressure (8,9), 
         //          CO (10,11), NH3 (12,13), N02 (14,15), 
         //          Noise (16,17)
-        
+        appDataSize = 14;
+
         // Humidity
         datum = humidity * 10;
-        data[0] = ( datum >> 8 ) & 0xFF; data[1] = datum & 0xFF;
+        appData[0] = ( datum >> 8 ) & 0xFF; appData[1] = datum & 0xFF;
         // Temperature
         datum = temperature * 10;
-        data[2] = ( datum >> 8 ) & 0xFF; data[3] = datum & 0xFF;
+        appData[2] = ( datum >> 8 ) & 0xFF; appData[3] = datum & 0xFF;
         // Pressure
         datum = pressure;
-        data[8] = ( datum >> 8 ) & 0xFF; data[9] = datum & 0xFF;
+        appData[8] = ( datum >> 8 ) & 0xFF; appData[9] = datum & 0xFF;
 
-        // PM 10
-        datum = rpm * 10;
-        data[4] = ( datum >> 8 ) & 0xFF; data[5] = datum & 0xFF;
+        // PM 1.0
+        datum = pm1 * 10;
+        appData[0] = ( datum >> 8 ) & 0xFF; appData[1] = datum & 0xFF;
         // PM 2.5
-        datum = fpm * 10;
-        data[6] = ( datum >> 8 ) & 0xFF; data[7] = datum & 0xFF;
-
-        // CO
-        datum = concetrationCO * 1;
-        data[10] = ( datum >> 8 ) & 0xFF; data[11] = datum & 0xFF;
-        // NH3
-        datum = concetrationNH3 * 1;
-        data[12] = ( datum >> 8 ) & 0xFF; data[13] = datum & 0xFF;
-        // NO2
-        datum = concetrationNO2 * 100;
-        data[14] = ( datum >> 8 ) & 0xFF; data[15] = datum & 0xFF;
+        datum = pm25 * 10;
+        appData[2] = ( datum >> 8 ) & 0xFF; appData[3] = datum & 0xFF;
+        // PM 10
+        datum = pm10 * 10;
+        appData[4] = ( datum >> 8 ) & 0xFF; appData[5] = datum & 0xFF;
 
         // Noise
         datum = noise * 100;
-        data[16] = ( datum >> 8 ) & 0xFF; data[17] = datum & 0xFF;
+        appData[16] = ( datum >> 8 ) & 0xFF; appData[17] = datum & 0xFF;
+        
+        send = true;
+    }
 
+    if (send)
+    {
         // LED on
-        digitalWrite(LED_PIN, HIGH);
+        eyes.clear(); eyes.show();
 
         // transmit
         LOG << F("Sending[") << millis() << F("]-");
-        int res =  LMIC_setTxData2(2, data, sizeof(data), 0);
-        LOG << ((res == 0) ? F("OK") : F("NOK")) << F(" @") << LMIC.txChnl << endl;;
+        LoRaWAN.send();
+        LOG << F(" ?") << endl;;
 
-        while ( LMIC.opmode & OP_TXRXPEND ) { os_runloop_once();  }
-        
+        send=false;
+
         // LED off
-        digitalWrite(LED_PIN, LOW);
+        eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); 
+        delay(200);
+        eyes.clear(); eyes.show();
     }
 
     LOG << F("[") << (0.001*(millis()-loop_ts)) << F(" s]") << endl << endl << endl << endl;  
@@ -350,4 +460,11 @@ void loop()
     ////////////////////////////////////
     //if (loops == 3) loops = 0; 
     ////////////////////////////////////
+
+    uint16_t voltage=analogRead(ADC); //return the voltage in mV, max value can be read is 2400mV 
+
+    eyes.setPixelColor(0, eyes.Color(10*loops % 256,0,0)); eyes.show(); delay(1000);
+    eyes.setPixelColor(0, eyes.Color(0,10*loops % 256,0)); eyes.show(); delay(1000);
+    eyes.setPixelColor(0, eyes.Color(0,0,10*loops % 256)); eyes.show(); delay(1000);
+    eyes.clear(); eyes.show();
 }
