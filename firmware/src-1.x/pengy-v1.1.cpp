@@ -18,7 +18,7 @@
 #include <SdsDustSensor.h>
 #include <DHT.h>
 
-#define DEBUG true
+#define DEBUG false
 #define LOG if(DEBUG)Serial
 
 SdsDustSensor sds(Serial1);

@@ -39,4 +39,4 @@ jobs:
 
     - name: Run PlatformIO
       working-directory: firmware
-      run: pio run -e v1.5-acq -e v1.5
+      run: pio run -e v1.5-acq -e v1.5 -e v2.0
