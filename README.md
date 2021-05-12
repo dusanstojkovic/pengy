@@ -9,7 +9,7 @@ The system concept and how it is build are described in the personal blog [quo.v
 
 The sensors on the nodes are measuring the relevant air parameters (t, RH, p, PM10, PM2.2, ...), data is acquiried with *LoRa32u4II* device and sent using *LoRaWAN* via *The Things Network* platform. Integration to *Thingy* as well to *Sensor Community* and *Pulse.Eco* platoforms is used for the visualization of the results.
 
-![](media/pengysystem.png)
+![](diagram/pengysystem.png)
 
 Depending on the version, different sensors are used, different parameters are measured.
 In the current version (1.5), parameters that are measured are: 
