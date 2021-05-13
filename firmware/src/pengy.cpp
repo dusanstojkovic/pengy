@@ -20,6 +20,7 @@
 
 #include <Streaming.h>
 
+
 //
 #include <SPS30.h>
 
@@ -66,27 +67,6 @@ unsigned int loops = 0;
 bool send = false;
 uint8_t data[6];
 
-
-void wait(unsigned long d)
-{
-    delay(d);
-    return;
-
-    unsigned long b_ = micros();
-    unsigned long e_ = d;
-
-    while (e_ > 0)
-    {
-        //os_runloop_once();
-        //yield();
-        while ( e_ > 0 && (micros() - b_) >= 1000)
-        {
-            e_--;
-            b_ += 1000;
-        }
-    }
-}
-
 // LED lights
 void lightInit()
 {
@@ -95,24 +75,74 @@ void lightInit()
     eyes.begin(); eyes.clear(); eyes.show();
 }
 
-void lightMeasuringStart()
+static TimerEvent_t lightEvent;
+volatile uint32_t lightTicks;
+enum lightEffect_t { RANDOM, RAINBOW, PULSE_RGB} ;
+
+static lightEffect_t lightEffect;
+
+void lightTick()
 {
-    // make rainbow effect
+    switch (lightEffect)
+    {
+        case RANDOM:
+            eyes.setPixelColor(0, eyes.Color(random(255), random(255), random(255)));
+            break;
+        case RAINBOW:
+            eyes.setPixelColor(0, eyes.Color(eyes.sine8((lightTicks-85) % 256), eyes.sine8(lightTicks % 256), eyes.sine8((lightTicks+85) % 256)));
+            break;
+        case PULSE_RGB:
+            break;
+    }
+    eyes.show();
+    
+    lightTicks = (lightTicks + 1) ;
+
+    TimerSetValue(&lightEvent, 10);
+    TimerStart(&lightEvent);
 }
 
-void lightMeasuringStop()
+void lightEffectStart(lightEffect_t effect)
 {
-    eyes.begin(); eyes.clear(); eyes.show();
+    eyes.begin();
+    lightTicks = 0;
+    lightEffect = effect;
+    lightTick();
+}
+
+
+void lightEffectStop()
+{
+    TimerStop(&lightEvent);
+    eyes.clear(); eyes.show();
 }
 
 void lightSetupBegin()
 {
-    eyes.setPixelColor(0, eyes.Color(255,0,0)); eyes.show(); delay(200);
-    eyes.setPixelColor(0, eyes.Color(0,255,0)); eyes.show(); delay(200);
-    eyes.setPixelColor(0, eyes.Color(0,0,255)); eyes.show(); delay(200);
+    eyes.begin(); 
+    for(int c = 0; c < 3; c++ ) {
+        for(int k = 0; k < 256; k++) {
+            switch(c) {
+                case 0: eyes.setPixelColor(0, eyes.Color(k,0,0));  break;
+                case 1: eyes.setPixelColor(0, eyes.Color(0,k,0));  break;
+                case 2: eyes.setPixelColor(0, eyes.Color(0,0,k));  break;
+            }
+            eyes.show(); 
+            delay(1);
+        }
+        for(int k = 255; k >= 0; k--) {
+            switch(c) {
+                case 0: eyes.setPixelColor(0, eyes.Color(k,0,0));  break;
+                case 1: eyes.setPixelColor(0, eyes.Color(0,k,0));  break;
+                case 2: eyes.setPixelColor(0, eyes.Color(0,0,k));  break;
+            }
+            eyes.show(); 
+            delay(1);
+        }
+    }
 }
 
-void lightSetupEnd()
+void lightSetupStop()
 {
     eyes.clear(); eyes.show();    
 }
@@ -122,7 +152,7 @@ void lightSetupEnd()
 // Acquisitionß
 void handleNoise()
 {
-    lightMeasuringStart();
+    lightEffectStart(RAINBOW);
 
     unsigned long start_ts = millis();
     while (millis() - start_ts < 7500)
@@ -162,14 +192,14 @@ void handleNoise()
 
     soundValue = soundValueCummulative / countSoundValueCummulative;
 
-    lightMeasuringStop();
+    lightEffectStop();
 
     LOG << F("NOISE - ") << F("N=") << soundValue << endl;
 }
 
 void handleTHP()
 {
-    lightMeasuringStart();
+    lightEffectStart(RAINBOW);
 
     float temperatureMin=3.4028235E+38, temperatureMax=-3.4028235E+38;
     float humidityMin=3.4028235E+38, humidityMax=-3.4028235E+38;
@@ -206,7 +236,7 @@ void handleTHP()
         {
             LOG << F(" (") << (l+1) << F(")  X") << endl;
         }
-        wait(1000);
+        delay(1000);
     }
     LOG << "t m " << temperatureMin << " M " << temperatureMax << endl;
     LOG << "H m " << humidityMin << " M " << humidityMax << endl;
@@ -224,7 +254,7 @@ void handleTHP()
     humidity = 1.0 * humidityCummulative / countTHPCummulative;
     pressure = 0.01 * pressureCummulative / countTHPCummulative;
 
-    lightMeasuringStop();
+    lightEffectStop();
 
     //LOG << F("THP - ") << F("t=") << temperature << F("°C - H=") << humidity<< F("%RH - p=") << pressure << F(" hPa") << endl;
 }
@@ -233,12 +263,12 @@ void handlePM()
 {
     LOG << F("PM") << endl;
     
-    lightMeasuringStart();
+    lightEffectStart(RAINBOW);
 
     bool began = sps30.beginMeasuring();
     LOG << (began ? F("+"):F("-")) << endl;
 
-    wait(30000);
+    delay(30000);
 
     float pm1Min=3.4028235E+38, pm1Max=-3.4028235E+38;
     float pm25Min=3.4028235E+38, pm25Max=-3.4028235E+38;
@@ -272,7 +302,7 @@ void handlePM()
           LOG << F(" (") << (l+1) << F(") X   ") << pm.statusToString() << endl;
         }
         */
-        wait(1000);
+        delay(1000);
     }            
     
     //LOG << "cnt " << pmCount << endl;
@@ -294,7 +324,7 @@ void handlePM()
     bool stopped = sps30.stopMeasuring();
     LOG << (stopped ? F("+"):F("-")) << endl;
     
-    lightMeasuringStop();
+    lightEffectStop();
 }
 
 // Normalization
@@ -332,6 +362,7 @@ void setup()
 
     // LED init
     lightInit();
+    TimerInit(&lightEvent, lightTick);
 
     // LED in
     lightSetupBegin();
@@ -346,6 +377,9 @@ void setup()
     bool initTHP = bme.begin(0x76, &Wire);
     Serial << (initTHP ? F("OK") : F("NOK")) << endl;;
 
+    // noise
+    pinMode(GPIO0, INPUT);
+
     // LoRaWAN
     boardInitMcu();
     LoRaWAN.ifskipjoin();
@@ -354,7 +388,23 @@ void setup()
     LoRaWAN.join();
 
     // LED out
-    lightSetupEnd();
+    lightInit();
+    lightSetupStop();
+
+    lightEffectStart(RANDOM);
+    delay(5000);
+    lightEffectStop();
+    delay(3000);
+
+    lightEffectStart(RAINBOW);
+    delay(5000);
+    lightEffectStop();
+    delay(3000);
+
+    lightEffectStart(PULSE_RGB);
+    delay(5000);
+    lightEffectStop();
+    delay(3000);
 
     Serial << "#" << endl << endl;
 }
@@ -437,7 +487,7 @@ void loop()
     if (send)
     {
         // LED on
-        eyes.clear(); eyes.show();
+        lightEffectStart(RANDOM);
 
         // transmit
         LOG << F("Sending[") << millis() << F("]-");
@@ -447,24 +497,21 @@ void loop()
         send=false;
 
         // LED off
-        eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); 
-        delay(200);
-        eyes.clear(); eyes.show();
+        delay(1000);
+        lightEffectStop();
     }
 
     LOG << F("[") << (0.001*(millis()-loop_ts)) << F(" s]") << endl << endl << endl << endl;  
 
-    while (millis() - loop_ts < 60000L) { wait(1000);} // sleep until full minute
+    while (millis() - loop_ts < 60000L) { delay(1000);} // sleep until full minute
     loops++;    
 
     ////////////////////////////////////
     //if (loops == 3) loops = 0; 
     ////////////////////////////////////
 
-    uint16_t voltage=analogRead(ADC); //return the voltage in mV, max value can be read is 2400mV 
+    uint16_t v1=analogRead(ADC); //return the voltage in mV, max value can be read is 2400mV 
+    uint16_t v2=analogRead(GPIO0); //return the voltage in mV, max value can be read is 2400mV 
 
-    eyes.setPixelColor(0, eyes.Color(10*loops % 256,0,0)); eyes.show(); delay(1000);
-    eyes.setPixelColor(0, eyes.Color(0,10*loops % 256,0)); eyes.show(); delay(1000);
-    eyes.setPixelColor(0, eyes.Color(0,0,10*loops % 256)); eyes.show(); delay(1000);
-    eyes.clear(); eyes.show();
+    eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); delay(500); eyes.clear(); eyes.show();
 }
