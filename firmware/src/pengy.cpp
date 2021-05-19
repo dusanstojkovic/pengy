@@ -2,9 +2,9 @@
   Pengy v2.0 - Air Quality Parameters acquisition
 
   This firmware acquires:
-     - PM2.5 and PM10 concetration from Sensirion SPS30 sensor
+     - PM1.0, PM2.5 and PM10 concetration from Sensirion SPS30 sensor
      - temperature, humidity and preassure from BME680 sensor
-     - sound level from LM386 enabled electret microphone (https://www.waveshare.com/sound-sensor.htm)
+     - sound level from MAX9814 electret microphone
 
   then accumulates, agregates data and sends it every hour using LoRaWAN 
   via The Things Network to Thingy.IO system.
@@ -15,13 +15,13 @@
 #include "Arduino.h"
 #include "Wire.h"
 
-#include "LoRaWan_APP.h"
-#include "lorawan.hpp"
+//
+#include "LoRaWanMinimal_APP.h"
+//#include "LoRaWan_APP.h"
+//#include "lorawan.hpp"
 
 #include <Streaming.h>
 
-
-//
 #include <SPS30.h>
 
 double pm1Cummulative=0, pm25Cummulative=0, pm10Cummulative=0;
@@ -45,11 +45,9 @@ float pressure;
 
 double soundValueCummulative=0;
 int countSoundValueCummulative = 0;
-double soundValue=0;
 
-//
+float noise = 0;
 
-float noise;
 
 // Eyes
 #include "CubeCell_NeoPixel.h"
@@ -58,14 +56,20 @@ CubeCell_NeoPixel eyes(1, RGB, NEO_GRB + NEO_KHZ800);
 #define DEBUG true
 #define LOG if(DEBUG)Serial
 
-uint8_t nwkSKey[] = NWK_S_KEY;
-uint8_t appSKey[] = APP_S_KEY;
-uint32_t devAddr = DEV_ADDR;
+//
+static const uint8_t NWKSKEY[16] = NWK_S_KEY;
+static const uint8_t APPSKEY[16] = APP_S_KEY;
+static const uint32_t DEVADDR = DEV_ADDR;
+uint16_t userChannelsMask[6]={ 0x00FF,0x0000,0x0000,0x0000,0x0000,0x0000 };
+//
+//uint8_t nwkSKey[] = NWK_S_KEY;
+//uint8_t appSKey[] = APP_S_KEY;
+//uint32_t devAddr = DEV_ADDR;
 
 unsigned int loops = 0;
 
 bool send = false;
-uint8_t data[6];
+uint8_t data[14];
 
 // LED lights
 void lightInit()
@@ -74,6 +78,8 @@ void lightInit()
     digitalWrite(Vext,LOW);
     eyes.begin(); eyes.clear(); eyes.show();
 }
+
+// Light effects
 
 static TimerEvent_t lightEvent;
 volatile uint32_t lightTicks;
@@ -109,7 +115,6 @@ void lightEffectStart(lightEffect_t effect)
     lightEffect = effect;
     lightTick();
 }
-
 
 void lightEffectStop()
 {
@@ -147,11 +152,12 @@ void lightSetupStop()
     eyes.clear(); eyes.show();    
 }
 
+// Acquisition
 
-
-// Acquisitionß
-void handleNoise()
+void acquireNoise()
 {
+    LOG << endl << F("Noise >>>") << endl;
+
     lightEffectStart(RAINBOW);
 
     unsigned long start_ts = millis();
@@ -162,7 +168,7 @@ void handleNoise()
         unsigned long sound_ts= millis();
         while (millis() - sound_ts < 125) // 125ms
         {
-            int soundVal = 0; for (int i=0; i<3; i++) soundVal += analogRead(GPIO0); soundVal/=4;
+            int soundVal = 0; for (int i=0; i<3; i++) soundVal += analogRead(ADC); soundVal/=4;
 
             if (soundVal < soundValMin) 
             {
@@ -189,16 +195,18 @@ void handleNoise()
     }
 
     LOG << " span Cum = " << soundValueCummulative << "   span Cnt " << countSoundValueCummulative << endl;
-
-    soundValue = soundValueCummulative / countSoundValueCummulative;
-
     lightEffectStop();
 
-    LOG << F("NOISE - ") << F("N=") << soundValue << endl;
+    LOG << F("<<<") << endl << endl;;    
+
+    noise = soundValueCummulative / countSoundValueCummulative;
+    noise = CAL_NOISE_1 * log(noise) + CAL_NOISE_0;    
 }
 
-void handleTHP()
+void acquireTHP()
 {
+    LOG << endl << F("THP >>>") << endl;
+
     lightEffectStart(RAINBOW);
 
     float temperatureMin=3.4028235E+38, temperatureMax=-3.4028235E+38;
@@ -215,7 +223,7 @@ void handleTHP()
 
         if (!isnanf(temperature) && !isnanf(humidity) && !isnanf(pressure))
         {
-            Serial << F(" (") << (l+1) << F(")   t=") << temperature << F("°C   H=") << humidity << F("%RH   p=") << pressure << F(" hPa   MASL=") << altitude << F(" m") << endl;
+            LOG << F(" (") << (l+1) << F(")   t=") << temperature << F("°C   H=") << humidity << F("%RH   p=") << pressure << F(" hPa   MASL=") << altitude << F(" m") << endl;
 
             temperatureCummulative += temperature;
             if (temperature < temperatureMin) temperatureMin = temperature;
@@ -250,18 +258,22 @@ void handleTHP()
         countTHPCummulative = countTHPCummulative - 2;
     }
     
-    temperature = 1.0 * temperatureCummulative / countTHPCummulative;
-    humidity = 1.0 * humidityCummulative / countTHPCummulative;
-    pressure = 0.01 * pressureCummulative / countTHPCummulative;
-
     lightEffectStop();
 
-    //LOG << F("THP - ") << F("t=") << temperature << F("°C - H=") << humidity<< F("%RH - p=") << pressure << F(" hPa") << endl;
+    LOG << F("<<<") << endl << endl;
+    
+    temperature = 1.0 * temperatureCummulative / countTHPCummulative;
+    humidity = 1.0 * humidityCummulative / countTHPCummulative;
+    pressure = 1.0 * pressureCummulative / countTHPCummulative;
+
+    temperature = CAL_TEMPERATURE_1 * temperature + CAL_TEMPERATURE_0;
+    humidity    = CAL_HUMIDITY_1    * humidity    + CAL_HUMIDITY_0;
+    pressure    = CAL_PRESSURE_1    * pressure    + CAL_PRESSURE_0;    
 }
 
-void handlePM()
+void acquirePM()
 {
-    LOG << F("PM") << endl;
+    LOG << endl << F("PM >>>") << endl;
     
     lightEffectStart(RAINBOW);
 
@@ -279,7 +291,7 @@ void handlePM()
     {
         if (sps30.readMeasurement())
         {
-            LOG <<F(" (") << (l+1) << F(")   PM1.0=") << sps30.massPM1 << F("µg/m³  PM2.5=") << sps30.massPM25 << F("µg/m³  PM4.0=") << sps30.massPM4 << F("µg/m³  PM10=") << sps30.massPM10 << F("µg/m³  size=") << endl;
+            LOG <<F(" (") << (l+1) << F(")   PM1.0=") << sps30.massPM1 << F("µg/m³  PM2.5=") << sps30.massPM25 << F("µg/m³  PM4.0=") << sps30.massPM4 << F("µg/m³  PM10=") << sps30.massPM10 << F("µg/m³  size=") << sps30.typPartSize << F("µm") << endl;
 
             pm1Cummulative += sps30.massPM1;
             if (sps30.massPM1 < pm1Min) pm1Min = sps30.massPM1;
@@ -317,42 +329,52 @@ void handlePM()
         countAQCummulative = countAQCummulative - 2;
     }
     
-    pm1 = 1.0 * pm1Cummulative / countAQCummulative;
-    pm25 = 1.0 * pm25Cummulative / countAQCummulative;
-    pm10 = 1.0 * pm10Cummulative / countAQCummulative;
-    
     bool stopped = sps30.stopMeasuring();
     LOG << (stopped ? F("+"):F("-")) << endl;
     
     lightEffectStop();
-}
 
-// Normalization
+    LOG << F("<<<") << endl << endl;
+    
+    pm1 = 1.0 * pm1Cummulative / countAQCummulative;
+    pm25 = 1.0 * pm25Cummulative / countAQCummulative;
+    pm10 = 1.0 * pm10Cummulative / countAQCummulative;
 
-void normalizeNoise()
-{
-    noise = CAL_NOISE_1 * log(noise) + CAL_NOISE_0;
-}
-
-void normalizeTHP()
-{
-    temperature = CAL_TEMPERATURE_1 * temperature + CAL_TEMPERATURE_0;
-    humidity    = CAL_HUMIDITY_1    * humidity    + CAL_HUMIDITY_0;
-    pressure    = CAL_PRESSURE_1    * pressure    + CAL_PRESSURE_0;
-}
-
-void normalizePM()
-{
     pm10 = CAL_PM10_1 * pm10 + CAL_PM10_0;
     pm1 = CAL_PM1_1 * pm1 + CAL_PM1_0;
-    pm25 = CAL_PM25_1 * pm25 + CAL_PM25_0;
+    pm25 = CAL_PM25_1 * pm25 + CAL_PM25_0;    
 }
 
+void acquireReset()
+{
+    countSoundValueCummulative = 0;
+    soundValueCummulative = 0;
+
+    countTHPCummulative = 0;
+    temperatureCummulative = 0;
+    humidityCummulative = 0;
+    pressureCummulative = 0;
+
+    countAQCummulative=0;
+    pm1Cummulative=0;
+    pm25Cummulative=0;
+    pm10Cummulative=0;
+}
+
+/*
+void downLinkDataHandle(McpsIndication_t *mcpsIndication)
+{
+  Serial.printf("Received downlink: %s, RXSIZE %d, PORT %d, DATA: ",mcpsIndication->RxSlot?"RXWIN2":"RXWIN1",mcpsIndication->BufferSize,mcpsIndication->Port);
+  for(uint8_t i=0;i<mcpsIndication->BufferSize;i++) {
+    Serial.printf("%02X",mcpsIndication->Buffer[i]);
+  }
+  Serial.println();
+}
+*/
 
 // Setup & Loop
 void setup()
 {
-
     while (!Serial && millis() < 10000);
     Serial.begin(115200);
     Wire.begin();
@@ -363,8 +385,6 @@ void setup()
     // LED init
     lightInit();
     TimerInit(&lightEvent, lightTick);
-
-    // LED in
     lightSetupBegin();
 
     // air quiality sensor
@@ -381,30 +401,22 @@ void setup()
     pinMode(GPIO0, INPUT);
 
     // LoRaWAN
+    Serial << F("Initializing LoRaWAN ... ");
     boardInitMcu();
-    LoRaWAN.ifskipjoin();
-
-    LoRaWAN.init(loraWanClass,loraWanRegion);
-    LoRaWAN.join();
+    LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
+    LoRaWAN.setAdaptiveDR(true);
+    bool joined = LoRaWAN.joinABP((uint8_t*)NWKSKEY, (uint8_t*)APPSKEY, DEVADDR);
+    Serial << (joined ? F("OK") : F("NOK")) << endl;
+    //
+    //boardInitMcu();
+    //LoRaWAN.ifskipjoin();
+    //
+    //LoRaWAN.init(loraWanClass,loraWanRegion);
+    //LoRaWAN.join();
 
     // LED out
     lightInit();
     lightSetupStop();
-
-    lightEffectStart(RANDOM);
-    delay(5000);
-    lightEffectStop();
-    delay(3000);
-
-    lightEffectStart(RAINBOW);
-    delay(5000);
-    lightEffectStop();
-    delay(3000);
-
-    lightEffectStart(PULSE_RGB);
-    delay(5000);
-    lightEffectStop();
-    delay(3000);
 
     Serial << "#" << endl << endl;
 }
@@ -413,73 +425,55 @@ void loop()
 {
     unsigned long loop_ts = millis();
 
-    LOG << F("[") << loop_ts << F(" m / ") << loops <<  F(" l] ") << endl;
-
-    if (loops % 20 == 1) // every 20 minutes - request readout
-    {
-        // Ambiental noise
-        handleNoise();
-        normalizeNoise();
-        LOG << F("NOISE ") << F("v=") << noise << F("dBA") << endl;
-
-        // Temperature, Humidity Pressure
-        handleTHP();
-        normalizeTHP();
-        LOG << F("THP ") << F("t=") << temperature << F("°C - H=") << humidity<< F("%RH - p=") << pressure << F(" hPa") << endl;
-
-        // Particulate metter
-        countAQCummulative=0;
-        pm1Cummulative=0;
-        pm25Cummulative=0;
-        pm10Cummulative=0;
-
-        handlePM();
-        normalizePM();
-        LOG << F("PM ") << F(" 1.0=") << pm1 << F("µg/m³  2.5=") << pm25 << F("µg/m³  4.0=") << 0 << F("µg/m³  10=") << pm10 << F("µg/m³") << endl;
-    }
+    Serial << endl << F("[") << loop_ts << F(" m / ") << loops <<  F(" l] ") << endl;
 
     if (loops % 5 == 0) // every 5 minutes - sample THP
-        handleTHP();
+    {
+        acquireTHP();
+        Serial << F("THP ") << F("t=") << temperature << F("°C - H=") << humidity<< F("%RH - p=") << pressure << F(" hPa") << endl;        
+    }
 
-    if (loops % 5 == 0) // every 10 minutes - sample particulates
-        handlePM();
+    if (loops % 10 == 0) // every 10 minutes - sample particulates
+    {
+        acquirePM();
+        Serial << F("PM ") << F(" 1.0=") << pm1 << F("µg/m³  2.5=") << pm25 << F("µg/m³  4.0=") << 0 << F("µg/m³  10=") << pm10 << F("µg/m³") << endl;        
+    }
 
     if (loops % 1 == 0) // every minute - sample noise
-        handleNoise();
+    {
+        acquireNoise();
+        Serial << F("NOISE ") << F("v=") << noise << F("dBA") << endl;
+    }
 
     if (loops % 20 == 2) // every 20 minutes - send
     {
         uint16_t datum;
-		// port 1 - Humidity (0,1), Temperature (2,3), PM10 (4,5), PM25 (6,7)
-		// port 2 - Humidity (0,1), Temperature (2,3), PM10 (4,5), PM25 (6,7), 
-        //          Pressure (8,9), 
-        //          CO (10,11), NH3 (12,13), N02 (14,15), 
-        //          Noise (16,17)
-        appDataSize = 14;
+        //appDataSize = 14;
+        //appData *******
 
         // Humidity
         datum = humidity * 10;
-        appData[0] = ( datum >> 8 ) & 0xFF; appData[1] = datum & 0xFF;
+        data[0] = ( datum >> 8 ) & 0xFF; data[1] = datum & 0xFF;
         // Temperature
         datum = temperature * 10;
-        appData[2] = ( datum >> 8 ) & 0xFF; appData[3] = datum & 0xFF;
+        data[2] = ( datum >> 8 ) & 0xFF; data[3] = datum & 0xFF;
         // Pressure
         datum = pressure;
-        appData[8] = ( datum >> 8 ) & 0xFF; appData[9] = datum & 0xFF;
+        data[4] = ( datum >> 8 ) & 0xFF; data[5] = datum & 0xFF;
 
         // PM 1.0
         datum = pm1 * 10;
-        appData[0] = ( datum >> 8 ) & 0xFF; appData[1] = datum & 0xFF;
+        data[6] = ( datum >> 8 ) & 0xFF; data[7] = datum & 0xFF;
         // PM 2.5
         datum = pm25 * 10;
-        appData[2] = ( datum >> 8 ) & 0xFF; appData[3] = datum & 0xFF;
+        data[8] = ( datum >> 8 ) & 0xFF; data[9] = datum & 0xFF;
         // PM 10
         datum = pm10 * 10;
-        appData[4] = ( datum >> 8 ) & 0xFF; appData[5] = datum & 0xFF;
+        data[10] = ( datum >> 8 ) & 0xFF; data[11] = datum & 0xFF;
 
         // Noise
         datum = noise * 100;
-        appData[16] = ( datum >> 8 ) & 0xFF; appData[17] = datum & 0xFF;
+        data[12] = ( datum >> 8 ) & 0xFF; data[13] = datum & 0xFF;
         
         send = true;
     }
@@ -490,28 +484,42 @@ void loop()
         lightEffectStart(RANDOM);
 
         // transmit
-        LOG << F("Sending[") << millis() << F("]-");
-        LoRaWAN.send();
-        LOG << F(" ?") << endl;;
-
-        send=false;
+        Serial << F("Sending[") << millis() << F("]-");
+        bool sent = LoRaWAN.send(sizeof(data), data, 3, true);
+        Serial << (sent ? F("OK") : F("NOK")) << endl;
+        //
+        //LoRaWAN.send();
+        //        
+        
+        if (sent)
+        {
+            acquireReset();
+            send=false;
+        }
 
         // LED off
-        delay(1000);
+        delay(500);
         lightEffectStop();
     }
 
     LOG << F("[") << (0.001*(millis()-loop_ts)) << F(" s]") << endl << endl << endl << endl;  
+    
+    ////////////////
+    /*
+    while (millis() - loop_ts < 60000L) { 
+        eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); delay(500); 
+        Serial << " - " << analogRead(GPIO0) << endl;
+        eyes.clear(); eyes.show(); delay(500);
+    } // sleep until full minute
+    */
+    ////////////////
 
-    while (millis() - loop_ts < 60000L) { delay(1000);} // sleep until full minute
+    while (millis() - loop_ts < 60000L) { delay(1000); } // sleep until full minute
     loops++;    
 
     ////////////////////////////////////
     //if (loops == 3) loops = 0; 
     ////////////////////////////////////
 
-    uint16_t v1=analogRead(ADC); //return the voltage in mV, max value can be read is 2400mV 
-    uint16_t v2=analogRead(GPIO0); //return the voltage in mV, max value can be read is 2400mV 
-
-    eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); delay(500); eyes.clear(); eyes.show();
+    eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); delay(250); eyes.clear(); eyes.show();
 }
