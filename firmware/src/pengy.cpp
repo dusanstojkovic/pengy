@@ -161,7 +161,7 @@ void acquireNoise()
     lightEffectStart(RAINBOW);
 
     unsigned long start_ts = millis();
-    while (millis() - start_ts < 7500)
+    while (millis() - start_ts < 5000)
     {
         double soundValMin=3.4028235E+38, soundValSubMin=3.4028235E+38, soundValMax=-3.4028235E+38, soundValSubMax= -3.4028235E+38;
 
@@ -397,9 +397,6 @@ void setup()
     bool initTHP = bme.begin(0x76, &Wire);
     Serial << (initTHP ? F("OK") : F("NOK")) << endl;;
 
-    // noise
-    pinMode(GPIO0, INPUT);
-
     // LoRaWAN
     Serial << F("Initializing LoRaWAN ... ");
     boardInitMcu();
@@ -427,6 +424,12 @@ void loop()
 
     Serial << endl << F("[") << loop_ts << F(" m / ") << loops <<  F(" l] ") << endl;
 
+    if (loops % 1 == 0) // every minute - sample noise
+    {
+        acquireNoise();
+        Serial << F("NOISE ") << F("v=") << noise << F("dBA") << endl;
+    }
+
     if (loops % 5 == 0) // every 5 minutes - sample THP
     {
         acquireTHP();
@@ -437,12 +440,6 @@ void loop()
     {
         acquirePM();
         Serial << F("PM ") << F(" 1.0=") << pm1 << F("µg/m³  2.5=") << pm25 << F("µg/m³  4.0=") << 0 << F("µg/m³  10=") << pm10 << F("µg/m³") << endl;        
-    }
-
-    if (loops % 1 == 0) // every minute - sample noise
-    {
-        acquireNoise();
-        Serial << F("NOISE ") << F("v=") << noise << F("dBA") << endl;
     }
 
     if (loops % 20 == 2) // every 20 minutes - send
@@ -504,15 +501,15 @@ void loop()
 
     LOG << F("[") << (0.001*(millis()-loop_ts)) << F(" s]") << endl << endl << endl << endl;  
     
-    ////////////////
-    /*
-    while (millis() - loop_ts < 60000L) { 
-        eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); delay(500); 
-        Serial << " - " << analogRead(GPIO0) << endl;
-        eyes.clear(); eyes.show(); delay(500);
-    } // sleep until full minute
-    */
-    ////////////////
+    // Color to match EAQI
+    eyes.clear();
+    if (pm25 >= 50 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.Color(150,0,50); } else // Very poor
+    if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eyes.Color(255,80,80); } else // Poor
+    if (pm25 >= 20 && pm25 <  25 || pm10 >=  35 && pm10 <   50) { eyes.Color(240,230,35); }else // Moderate
+    if (pm25 >= 10 && pm25 <  20 || pm10 >=  20 && pm10 <   35) { eyes.Color(80,204,170); } else // Fair
+    if (pm25 >   0 && pm25 <  10 || pm10 >    0 && pm10 <   20) { eyes.Color(80,240,230); }// Good
+    eyes.show();
+    //
 
     while (millis() - loop_ts < 60000L) { delay(1000); } // sleep until full minute
     loops++;    
