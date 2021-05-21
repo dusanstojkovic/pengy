@@ -482,7 +482,7 @@ void loop()
 
         // transmit
         Serial << F("Sending[") << millis() << F("]-");
-        bool sent = LoRaWAN.send(sizeof(data), data, 3, true);
+        bool sent = LoRaWAN.send(sizeof(data), data, 3, false);
         Serial << (sent ? F("OK") : F("NOK")) << endl;
         //
         //LoRaWAN.send();
@@ -503,11 +503,11 @@ void loop()
     
     // Color to match EAQI
     eyes.clear();
-    if (pm25 >= 50 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.Color(150,0,50); } else // Very poor
-    if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eyes.Color(255,80,80); } else // Poor
-    if (pm25 >= 20 && pm25 <  25 || pm10 >=  35 && pm10 <   50) { eyes.Color(240,230,35); }else // Moderate
-    if (pm25 >= 10 && pm25 <  20 || pm10 >=  20 && pm10 <   35) { eyes.Color(80,204,170); } else // Fair
-    if (pm25 >   0 && pm25 <  10 || pm10 >    0 && pm10 <   20) { eyes.Color(80,240,230); }// Good
+    if (pm25 >= 50 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.setPixelColor(0, eyes.Color(150,0,50)); } else // Very poor
+    if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eyes.setPixelColor(0, eyes.Color(255,80,80)); } else // Poor
+    if (pm25 >= 20 && pm25 <  25 || pm10 >=  35 && pm10 <   50) { eyes.setPixelColor(0, eyes.Color(240,230,35)); }else // Moderate
+    if (pm25 >= 10 && pm25 <  20 || pm10 >=  20 && pm10 <   35) { eyes.setPixelColor(0, eyes.Color(80,204,170)); } else // Fair
+    if (pm25 >   0 && pm25 <  10 || pm10 >    0 && pm10 <   20) { eyes.setPixelColor(0, eyes.Color(80,240,230)); }// Good
     eyes.show();
     //
 
