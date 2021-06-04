@@ -80,7 +80,7 @@ void setup()
     os_init();
     LMIC_reset();
 
-    LMIC_setSession (0x1, DEVADDR, (uint8_t*)NWKSKEY, (uint8_t*)APPSKEY);
+    LMIC_setSession (0x13, DEVADDR, (uint8_t*)NWKSKEY, (uint8_t*)APPSKEY);
 
     LMIC_setupChannel(0, 868100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
     LMIC_setupChannel(1, 868300000, DR_RANGE_MAP(DR_SF12, DR_SF7B), BAND_CENTI);      // g-band
