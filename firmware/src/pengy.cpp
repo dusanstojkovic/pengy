@@ -403,6 +403,14 @@ void setup()
     LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
     LoRaWAN.setAdaptiveDR(true);
     bool joined = LoRaWAN.joinABP((uint8_t*)NWKSKEY, (uint8_t*)APPSKEY, DEVADDR);
+	
+    // workaround to set NetId
+    MibRequestConfirm_t mibReq;
+	mibReq.Type = MIB_NET_ID;
+	mibReq.Param.NetID = 0x13;
+	LoRaMacMibSetRequestConfirm(&mibReq);
+    //
+    
     Serial << (joined ? F("OK") : F("NOK")) << endl;
     //
     //boardInitMcu();
