@@ -7,6 +7,16 @@ ttn_mqtt:
   username: pengy
   password: ttn-account-v2.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
+logstash:
+  host: 45.129.180.166
+  port: 5000
+  username: "?"
+  password: "?"
+
 device_keys:
-  69bafab7: 4AT9C800
   17b71925: F0FMJD2X
+  69bafab7: 4AT9C800
+  64a7336b: 64a7336b
+  6c720861: 6c720861
+  864d1975: 864d1975
+  2382fbe6: 9HM5X7V8 
