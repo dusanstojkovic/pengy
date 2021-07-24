@@ -8,40 +8,32 @@
 
 The system concept and how it is build are described in the personal blog [quo.vadis.stojkovic.ch](https://quo.vadis.stojkovic.ch/air-pollution-monitor/)
 
-## Description
+## Description 🚧
 
-The sensors on the nodes are measuring the relevant air parameters (t, RH, p, PM10, PM2.2, ...), data is acquiried with *LoRa32u4II* device and sent using *LoRaWAN* via *The Things Network* platform. Integration to *Thingy* as well to *Sensor Community* and *Pulse.Eco* platoforms is used for the visualization of the results.
+The sensors on the nodes are measuring the relevant air parameters (t, RH, p, PM1.0, PM2.5, PM10 ...), data is acquiried with [*Heltect CubeCell (HTCC-AB01)*](https://heltec.org/project/htcc-ab01/) device and sent using *LoRaWAN* via *The Things Network* platform. Integration to *Thingy* as well to *Sensor Community* and *Pulse.Eco* platoforms is used for the visualization of the results.
 
+🚧
 ![](diagram/pengysystem.png)
+🚧
 
 Depending on the version, different sensors are used, different parameters are measured.
-In the current version (1.5), parameters that are measured are: 
+In the current version (2.0), parameters that are measured are: 
 - air temperature (t)
 - air relative humidity (RH)
 - atmospheric pressure (p)
 - environmental noise
 - respirable (<10μm) particulate matter mass concetration (PM 10)
 - fine (<2.5 μm) particulate matter mass concetration (PM 2.5)
-- carbon monoxide concetration (CO)
-- nitrogen dioxide concetration(NO2)
-- ammonia concetration (NH3)
+- ultra fine (<1 μm) particulate matter mass concetration (PM 1)
 
 using the following sensors:
-- SDS011 
-- BME680
-- MiCS-6814
-- LM386
+- SPS30
+- BME280
+- MAX9814 amplifier based microphone
 
-
-In the previous versions (1.x), the following parameters are measured:
-- air temperature (t)
-- air relative humidity (RH)
-- respirable (<10μm) particulate matter mass concetration (PM 10)
-- fine (<2.5 μm) particulate matter mass concetration (PM 2.5)
-
-using the following sensors:
-- SDS012
-- DHT22
+For the overview of the parameters and sensor used in previous version refer to:
+- version 1.0 - https://github.com/dusanstojkovic/pengy/tree/v1.0
+- version 1.5 - https://github.com/dusanstojkovic/pengy/tree/v1.5
 
 ## Content
 
@@ -51,6 +43,8 @@ using the following sensors:
 * Python script to push the data to *Pulse.Eco* platform is in folder [pulse.eco](integration/pulse.eco/)
 * Supporting pictures, drawings and diagrams you can find under [media](media/) folder
 * Some additional documentation can be found under [docs](firmware/docs/)
+
+## Electrical schema and assembly 🚧
 
 ## Additional information
 
@@ -63,7 +57,3 @@ More information about the environmental data crowdsourcing platform **Pulse.Eco
 
 ## Notice
 Due to the DIY nature of this system, the resulting measurements cannot be considered as more precise or accurate than the official measurement performed.
-
-## License
-
-Copyright (c) 2021 Dušan Stojković

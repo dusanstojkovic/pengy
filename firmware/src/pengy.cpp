@@ -509,7 +509,7 @@ void loop()
 
     LOG << F("[") << (0.001*(millis()-loop_ts)) << F(" s]") << endl << endl << endl << endl;  
     
-    // Color to match EAQI
+    // Color to match EAQI (https://coolors.co/50f0e6-50ccaa-f0e623-ff5050-960032)
     eyes.clear();
     if (pm25 >= 50 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.setPixelColor(0, eyes.Color(150,0,50)); } else // Very poor
     if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eyes.setPixelColor(0, eyes.Color(255,80,80)); } else // Poor
