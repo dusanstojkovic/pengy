@@ -2,10 +2,10 @@ pulse_eco:
   software_version: 'pengy v2.0'
 
 ttn_mqtt:
-  server: eu.thethings.network
+  server: eu1.cloud.thethings.network
   port: 8883
-  username: pengy
-  password: ttn-account-v2.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  username: pengy@ttn
+  password: XXXXX.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY.ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
 
 logstash:
   host: 45.129.180.166
@@ -15,8 +15,12 @@ logstash:
 
 device_keys:
   17b71925: F0FMJD2X
-  69bafab7: 4AT9C800
+  203832d9: 02768967
+  2382fbe6: 9HM5X7V8
+  4f6268ff: B6337Z86
   64a7336b: 64a7336b
+  69bafab7: 4AT9C800
   6c720861: 6c720861
   864d1975: 864d1975
-  2382fbe6: 9HM5X7V8 
+  e804c016: TWUT3Q7F
+  595e54c4: 19ILY0EN

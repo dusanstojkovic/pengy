@@ -142,7 +142,7 @@ def sendPulseEco():
 
 def ttn_on_connect(client, userdata, flags, rc):
 	log.info('MQTT (TTN) * On Connect - Result: ' + paho.mqtt.client.connack_string(rc))
-	ttn_mqtt_client.subscribe("pengy/devices/+/up", 0)
+	ttn_mqtt_client.subscribe("v3/pengy@ttn/devices/+/up", 0)
 
 
 def ttn_on_disconnect(client, userdata, rc):
@@ -155,31 +155,35 @@ def ttn_on_message(client, userdata, message):
 
 		try:
 			payload = message.payload.decode('utf8')
-			data = json.loads(payload)							 
+			message_data = json.loads(payload)
+
+			uid = message_data["end_device_ids"].get("device_id")
+
+			#uplink
+			uplink_message = message_data["uplink_message"]
+
+			alt  = uplink_message["locations"]["user"]["altitude"]
+
+			# data
+			data = uplink_message["decoded_payload"]
+
+			ver =  data.get("Version")
 			
-			uid = data["dev_id"]
-
-			alt  = data["metadata"]["altitude"]
-
-			ver =  data["payload_fields"].get("Version")
+			tem  = data.get("Temperature") # v1  v1.5  v2.0
+			hum  = data.get("Humidity")    # v1  v1.5  v2.0
+			pre  = data.get("Pressure")    #     v1.5  v2.0
 			
-			tem  = data["payload_fields"].get("Temperature") # v1  v1.5  v2.0
-			hum  = data["payload_fields"].get("Humidity")    # v1  v1.5  v2.0
-			pre  = data["payload_fields"].get("Pressure")    #     v1.5  v2.0
-			
-			pm1  = data["payload_fields"].get("UPM")         #           v2.0
-			pm25 = data["payload_fields"].get("FPM")         # v1  v1.5  v2.0
-			pm10 = data["payload_fields"].get("RPM")         # v1  v1.5  v2.0
+			pm1  = data.get("UPM")         #           v2.0
+			pm25 = data.get("FPM")         # v1  v1.5  v2.0
+			pm10 = data.get("RPM")         # v1  v1.5  v2.0
 
-			no2  = data["payload_fields"].get("NO2")         # v1  v1.5
-			co   = data["payload_fields"].get("CO")          # v1  v1.5
-			nh3  = data["payload_fields"].get("NH3")         # v1  v1.5
+			no2  = data.get("NO2")         # v1  v1.5
+			co   = data.get("CO")          # v1  v1.5
+			nh3  = data.get("NH3")         # v1  v1.5
 
-			noi  = data["payload_fields"].get("Noise")       #     v1.5  v2.0
+			noi  = data.get("Noise")       #     v1.5  v2.0
 
-			aqi  = data["payload_fields"].get("EAQI", "Unknown")
-
-			is_retry = data.get("is_retry", False)
+			aqi  = data.get("EAQI", "Unknown")
 		except Exception as ex:
 			log.error('MQTT (TTN) * On Message - Error parsing payload: %s - %s' % (payload, str(ex)), exc_info=True)
 			return
@@ -196,9 +200,6 @@ def ttn_on_message(client, userdata, message):
 				index = [datetime.datetime.now()]))
 
 		aq[uid] = aq[uid].last('24h')
-
-		if is_retry:
-			return
 
 	except Exception as ex:
 		log.error('MQTT (TTN) * On Message - Error : %s' % str(ex), exc_info=True)

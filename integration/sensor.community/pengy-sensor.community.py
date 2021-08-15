@@ -82,6 +82,7 @@ def sendSensorCommunity():
 			aq[uid] = aq[uid].append(pd.DataFrame(
 				data = {"rpm": [np.nan],
 						"fpm": [np.nan], 
+						"upm": [np.nan], 
 						"tem": [np.nan],
 						"hum": [np.nan],
 						"pre": [np.nan]},
@@ -90,21 +91,26 @@ def sendSensorCommunity():
 			aq_ = aq[uid].rolling('30min').median()
 			rpm = round(aq_.rpm.iat[-1],0)
 			fpm = round(aq_.fpm.iat[-1],0)
+			upm = round(aq_.upm.iat[-1],0)
 			tem = round(aq_.tem.iat[-1],1)
 			hum = round(aq_.hum.iat[-1],0)
 			pre = round(aq_.pre.iat[-1],0)
 			
-			log.info('Sensor.Community * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, tem, hum, pre))
+			log.info('Sensor.Community * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   UPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, upm, tem, hum, pre))
 
 			if ver[uid] == '1.0':
 				postSensorCommunity('ttn-pengy-'+uid, 1, { "P1": rpm, "P2": fpm } )
 				postSensorCommunity('ttn-pengy-'+uid, 7, { "temperature": tem, "humidity": hum } )
 			
-			if ver[uid] == '1.5' or ver[uid] == '2.0':
+			if ver[uid] == '1.5':
 				postSensorCommunity('TTN-'+uid, 1, { "P1": rpm, "P2": fpm } )
 				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
 
-			if np.isnan(rpm) and np.isnan(fpm) and np.isnan(tem) and np.isnan(hum) and np.isnan(pre):
+			if ver[uid] == '2.0':
+				postSensorCommunity('TTN-'+uid, 1, { "P0": upm, "P1": rpm, "P2": fpm } )
+				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
+
+			if np.isnan(rpm) and np.isnan(fpm) and np.isnan(upm) and np.isnan(tem) and np.isnan(hum) and np.isnan(pre):
 				naned_uids.append(uid)
 
 		for naned_uid in naned_uids:
@@ -122,7 +128,7 @@ def sendSensorCommunity():
 
 def ttn_on_connect(client, userdata, flags, rc):
 	log.info('MQTT (TTN) * On Connect - Result: ' + paho.mqtt.client.connack_string(rc))
-	ttn_mqtt_client.subscribe("pengy/devices/+/up", 0)
+	ttn_mqtt_client.subscribe("v3/pengy@ttn/devices/+/up", 0)
 
 
 def ttn_on_disconnect(client, userdata, rc):
@@ -135,40 +141,37 @@ def ttn_on_message(client, userdata, message):
 
 		try:
 			payload = message.payload.decode('utf8')
-			data = json.loads(payload)							 
+			message_data = json.loads(payload)
+			uplink_message = message_data["uplink_message"]
+			data = uplink_message["decoded_payload"]
+
+			uid = message_data["end_device_ids"].get("device_id")
+
+			version = data.get("Version")
 			
-			uid = data["dev_id"]
-
-			version = data["payload_fields"].get("Version")
+			tem  = data.get("Temperature") # v1  v1.5  v2.0
+			hum  = data.get("Humidity")    # v1  v1.5  v2.0
+			pre  = data.get("Pressure")    #     v1.5  v2.0
 			
-			tem  = data["payload_fields"].get("Temperature") # v1  v1.5  v2.0
-			hum  = data["payload_fields"].get("Humidity")    # v1  v1.5  v2.0
-			pre  = data["payload_fields"].get("Pressure")    #     v1.5  v2.0
-			
-			rpm  = data["payload_fields"].get("RPM")         # v1  v1.5  v2.0
-			fpm  = data["payload_fields"].get("FPM")         # v1  v1.5  v2.0
+			rpm  = data.get("RPM")         # v1  v1.5  v2.0
+			fpm  = data.get("FPM")         # v1  v1.5  v2.0
+			upm  = data.get("UPM")         #           v2.0
 
-			aqi  = data["payload_fields"].get("EAQI", "Unknown")
-
-			is_retry = data.get("is_retry", False)
-
+			aqi  = data.get("EAQI", "Unknown")
 		except Exception as ex:
 			log.error('MQTT (TTN) * On Message - Error parsing payload: %s - %s' % (payload, str(ex)), exc_info=True)
 			return
 
 		if not uid in aq:
-			aq[uid] = pd.DataFrame(data = {"fpm": [], "rpm": [], "tem": [], "hum": []}, index = [])
+			aq[uid] = pd.DataFrame(data = {"rpm": [], "fpm": [], "upm": [], "tem": [], "hum": []}, index = [])
 			ver[uid] = version
 
 		aq[uid] = aq[uid].append(pd.DataFrame(
 				data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
-						"rpm" : [rpm or np.nan], "fpm" : [fpm or np.nan]},
+						"rpm" : [rpm or np.nan], "fpm" : [fpm or np.nan], "upm" : [upm or np.nan]},
 				index = [datetime.datetime.now()]))
 
 		aq[uid] = aq[uid].last('24h')
-
-		if is_retry:
-			return
 
 	except Exception as ex:
 		log.error('MQTT (TTN) * On Message - Error : %s' % str(ex), exc_info=True)
