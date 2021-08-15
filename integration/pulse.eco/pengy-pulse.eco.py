@@ -5,38 +5,58 @@ import yaml
 import json
 import logging
 from logstash_async.handler import AsynchronousLogstashHandler
+from logstash_async.transport import HttpTransport
 from logstash_async.handler import LogstashFormatter
 import paho.mqtt.client
 import requests
 import pandas as pd
 import numpy as np
 
-# logging config
-logging.basicConfig(
-	level=logging.INFO, #os.environ.get("LOG_LEVEL", "WARNING")
-	format='%(asctime)s [%(levelname)-8s] #%(lineno)03d / %(funcName)s / (%(threadName)-10s) %(message)s',
-)
-
 # reading configuration
 with open("pengy-pulse.eco.yml", 'r') as ymlfile:
 	config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
+# logstash config
+logstash_host = config['logstash']['host']
+logstash_port = 443
+logstash_username = config['logstash']['username']
+logstash_password = config['logstash']['password']
+logstash_environment= config['logstash']['environment']
+logstash_log_level = config['logstash']['log_level']
+
+# logging config
+logging.basicConfig(
+	level=logstash_log_level,
+	format='%(asctime)s [%(levelname)-8s] #%(lineno)03d / %(funcName)s / (%(threadName)-10s) %(message)s',
+)
+
 # remote logging set-up
 log = logging.getLogger("stash")
-log.setLevel(logging.INFO) #os.environ.get("LOGSTASH_LEVEL", "WARNING")
+log.setLevel(logstash_log_level)
+
+transport = HttpTransport(
+    host=logstash_host,
+    port=logstash_port,
+    ssl_enable=True,
+    ssl_verify=True,
+    timeout=5.0,
+    username=logstash_username,
+    password=logstash_password)
+
 handler = AsynchronousLogstashHandler(
-    host=config['logstash']['host'],
-    port=config['logstash']['port'],
-	username=config['logstash']['username'],
-	password=config['logstash']['password'],
-    ssl_enable=False, # True
-    ssl_verify=False,
+    host=logstash_host,
+    port=logstash_port,
+	transport=transport,
     database_path='log-stash.db')
+
 formatter = LogstashFormatter(
 	extra={
 		'application': "pengy",
-		'environment': "live"})
+		'component': "pulse.eco",
+		'environment': logstash_environment})
+
 handler.setFormatter(formatter)
+
 log.addHandler(handler)
 
 # ttn config

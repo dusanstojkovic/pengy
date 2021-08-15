@@ -8,10 +8,11 @@ ttn_mqtt:
   password: XXXXX.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY.ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
 
 logstash:
-  host: 45.129.180.166
-  port: 5000
-  username: "?"
-  password: "?"
+  host: logstash.elastic.sting.dev
+  username: '??????????'
+  password: '??????????'
+  environment: dev/test/live
+  log_level: INFO
 
 device_keys:
   17b71925: F0FMJD2X
