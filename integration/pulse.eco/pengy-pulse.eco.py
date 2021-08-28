@@ -54,7 +54,6 @@ formatter = LogstashFormatter(
 		'application': "pengy",
 		'component': "pulse.eco",
 		'environment': logstash_environment})
-
 handler.setFormatter(formatter)
 
 log.addHandler(handler)
@@ -175,17 +174,18 @@ def ttn_on_message(client, userdata, message):
 
 		try:
 			payload = message.payload.decode('utf8')
+
 			message_data = json.loads(payload)
 
-			uid = message_data["end_device_ids"].get("device_id")
-
-			#uplink
+			device_ids = message_data["end_device_ids"]
 			uplink_message = message_data["uplink_message"]
 
-			alt  = uplink_message["locations"]["user"]["altitude"]
-
-			# data
 			data = uplink_message["decoded_payload"]
+			rx_data = uplink_message["rx_metadata"]
+
+			uid = device_ids.get("device_id")
+
+			alt  = uplink_message["locations"]["user"]["altitude"]
 
 			ver =  data.get("Version")
 			
@@ -250,9 +250,7 @@ try:
 	ttn_mqtt_client.on_log = ttn_on_log
 
 	ttn_mqtt_client.username_pw_set(username=ttn_mqtt_username, password=ttn_mqtt_password)
-
 	ttn_mqtt_client.tls_set('thethings-network.pem')
-	ttn_mqtt_client.tls_insecure_set(True)
 	ttn_mqtt_client.connect(ttn_mqtt_broker, ttn_mqtt_broker_port, 60)
 
 	ttn_mqtt_client.loop_start()
