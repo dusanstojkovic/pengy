@@ -97,8 +97,9 @@ def postSensorCommunity(sensor_id, sensor_pin, values):
 def sendSensorCommunity():
 	try:
 		naned_uids = []
+		uids = aq.keys()
 
-		for uid in aq:
+		for uid in uids:
 			aq[uid] = aq[uid].append(pd.DataFrame(
 				data = {"rpm": [np.nan],
 						"fpm": [np.nan], 
@@ -116,6 +117,11 @@ def sendSensorCommunity():
 			hum = round(aq_.hum.iat[-1],0)
 			pre = round(aq_.pre.iat[-1],0)
 			
+			if np.isnan(rpm) and np.isnan(fpm) and np.isnan(upm) and np.isnan(tem) and np.isnan(hum) and np.isnan(pre):
+				naned_uids.append(uid)
+				log.info('Sensor.Community * Send - Sensor %s [v%s]: NULL' % (uid, ver[uid]))
+				continue
+
 			log.info('Sensor.Community * Send - Sensor %s [v%s]: RPM = %s   FPM = %s   UPM = %s   t = %s   RH = %s   p = %s hPa' % (uid, ver[uid], rpm, fpm, upm, tem, hum, pre))
 
 			if ver[uid] == '1.0':
@@ -129,9 +135,6 @@ def sendSensorCommunity():
 			if ver[uid] == '2.0':
 				postSensorCommunity('TTN-'+uid, 1, { "P0": upm, "P1": rpm, "P2": fpm } )
 				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
-
-			if np.isnan(rpm) and np.isnan(fpm) and np.isnan(upm) and np.isnan(tem) and np.isnan(hum) and np.isnan(pre):
-				naned_uids.append(uid)
 
 		for naned_uid in naned_uids:
 			aq.pop(naned_uid, None)

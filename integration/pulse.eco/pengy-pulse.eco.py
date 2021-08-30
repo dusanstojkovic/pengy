@@ -81,8 +81,9 @@ def sendPulseEco():
 
 	try:
 		naned_uids = []
+		uids = aq.keys()
 
-		for uid in aq:
+		for uid in uids:
 			aq[uid] = aq[uid].append(pd.DataFrame(
 				data = {"pm1": [np.nan],
 						"pm25": [np.nan], 
@@ -108,6 +109,12 @@ def sendPulseEco():
 			nh3 = round(aq_.nh3.iat[-1],0)
 			noi = round(aq_.noi.iat[-1],0)
 			alt = al[uid]
+
+			if (np.isnan(tem) and np.isnan(hum) and np.isnan(pre) and np.isnan(noi) and
+				np.isnan(pm1) and np.isnan(pm25) and np.isnan(pm10)):
+				naned_uids.append(uid)
+				log.info('Pulse.Eco * Send - Sensor %s : NULL' % (uid))
+				continue
 
 			log.info('Pulse.Eco * Send - Sensor %s : PM1.0 = %s μg/m³   PM2.5 = %s μg/m³   PM10 = %s μg/m³   t = %s °C   RH = %s %%   p = %s hPa   MASL = %s m   NO2 = %s ppm   CO = %s ppm   NH3 = %s ppm   Noise = %s dBa' % (uid, pm1, pm25, pm10, tem, hum, pre, alt, no2, co, nh3, noi), extra={"device": uid})
 
@@ -141,10 +148,6 @@ def sendPulseEco():
 				r = requests.get('https://pulse.eco/wifipoint/store', params)
 
 				log.debug('Pulse.Eco * GET : %s' % r.url)
-
-				if (np.isnan(tem) and np.isnan(hum) and np.isnan(pre) and
-				    np.isnan(pm1) and np.isnan(pm25) and np.isnan(pm10) and
-					np.isnan(noi)): naned_uids.append(uid)
 
 			except requests.ConnectionError as e:
 				log.error('Pulse.Eco * Send - Connection error: %s' % str(e), exc_info=True)
