@@ -46,6 +46,13 @@ For the overview of the parameters and sensor used in previous version refer to:
 
 ## Electrical schema and assembly 🚧
 
+## EAQI - European Air Quality Index
+
+One of the parameters that are calculated based on particulate matter concetration measured is European Air Quality Index) EAQI. More information about the index and methodology can be found http://airindex.eea.europa.eu/.
+
+TL/DR version is that 24 hour running means of PM based on the last 24 hours are considered and used for 
+EAQI calculation.
+
 ## Additional information
 
 More information regarding LoRaWAN and The Things Network can be found on their sites [LoRa Alliance](https://lora-alliance.org/about-lorawan) and [The Things Network](https://www.thethingsnetwork.org/).
