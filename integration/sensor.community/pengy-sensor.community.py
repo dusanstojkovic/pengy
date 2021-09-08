@@ -96,8 +96,8 @@ def postSensorCommunity(sensor_id, sensor_pin, values):
 
 def sendSensorCommunity():
 	try:
-		naned_uids = []
-		uids = aq.keys()
+		uids = list(aq.keys())
+		uids_naned = []
 
 		for uid in uids:
 			aq[uid] = aq[uid].append(pd.DataFrame(
@@ -118,7 +118,7 @@ def sendSensorCommunity():
 			pre = round(aq_.pre.iat[-1],0)
 			
 			if np.isnan(rpm) and np.isnan(fpm) and np.isnan(upm) and np.isnan(tem) and np.isnan(hum) and np.isnan(pre):
-				naned_uids.append(uid)
+				uids_naned.append(uid)
 				log.info('Sensor.Community * Send - Sensor %s [v%s]: NULL' % (uid, ver[uid]))
 				continue
 
@@ -136,10 +136,10 @@ def sendSensorCommunity():
 				postSensorCommunity('TTN-'+uid, 1, { "P0": upm, "P1": rpm, "P2": fpm } )
 				postSensorCommunity('TTN-'+uid, 11, { "temperature": tem, "humidity": hum , "pressure": pre} )
 
-		for naned_uid in naned_uids:
-			aq.pop(naned_uid, None)
-			ver.pop(naned_uid, None)
-			log.warning('Sensor.Community * Send - Sensor %s - removing due to the lack of data' % (naned_uid))
+		for uid_naned in uids_naned:
+			aq.pop(uid_naned, None)
+			ver.pop(uid_naned, None)
+			log.warning('Sensor.Community * Send - Sensor %s - removing due to the lack of data' % (uid_naned))
 
 	except Exception as e:
 		log.error('Sensor.Community * Send - Error: %s' % str(e), exc_info=True)

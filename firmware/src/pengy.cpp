@@ -15,10 +15,7 @@
 #include "Arduino.h"
 #include "Wire.h"
 
-//
 #include "LoRaWanMinimal_APP.h"
-//#include "LoRaWan_APP.h"
-//#include "lorawan.hpp"
 
 #include <Streaming.h>
 
@@ -48,38 +45,30 @@ int countSoundValueCummulative = 0;
 
 float noise = 0;
 
-
-// Eyes
 #include "CubeCell_NeoPixel.h"
 CubeCell_NeoPixel eyes(1, RGB, NEO_GRB + NEO_KHZ800);
 
 #define DEBUG true
 #define LOG if(DEBUG)Serial
 
-//
 static const uint8_t NWKSKEY[16] = NWK_S_KEY;
 static const uint8_t APPSKEY[16] = APP_S_KEY;
 static const uint32_t DEVADDR = DEV_ADDR;
 uint16_t userChannelsMask[6]={ 0x00FF,0x0000,0x0000,0x0000,0x0000,0x0000 };
-//
-//uint8_t nwkSKey[] = NWK_S_KEY;
-//uint8_t appSKey[] = APP_S_KEY;
-//uint32_t devAddr = DEV_ADDR;
 
 unsigned int loops = 0;
 
 bool send = false;
 uint8_t data[14];
 
-// LED lights
+// LED lights and effects
+
 void lightInit()
 {
     pinMode(Vext,OUTPUT);
     digitalWrite(Vext,LOW);
     eyes.begin(); eyes.clear(); eyes.show();
 }
-
-// Light effects
 
 static TimerEvent_t lightEvent;
 volatile uint32_t lightTicks;
@@ -409,15 +398,8 @@ void setup()
 	mibReq.Type = MIB_NET_ID;
 	mibReq.Param.NetID = 0x13;
 	LoRaMacMibSetRequestConfirm(&mibReq);
-    //
     
     Serial << (joined ? F("OK") : F("NOK")) << endl;
-    //
-    //boardInitMcu();
-    //LoRaWAN.ifskipjoin();
-    //
-    //LoRaWAN.init(loraWanClass,loraWanRegion);
-    //LoRaWAN.join();
 
     // LED out
     lightInit();
@@ -453,8 +435,6 @@ void loop()
     if (loops % 20 == 2) // every 20 minutes - send
     {
         uint16_t datum;
-        //appDataSize = 14;
-        //appData *******
 
         // Humidity
         datum = humidity * 10;
@@ -491,10 +471,7 @@ void loop()
         // transmit
         Serial << F("Sending[") << millis() << F("]-");
         bool sent = LoRaWAN.send(sizeof(data), data, 3, false);
-        Serial << (sent ? F("OK") : F("NOK")) << endl;
-        //
-        //LoRaWAN.send();
-        //        
+        Serial << (sent ? F("OK") : F("NOK")) << endl; 
         
         if (sent)
         {
@@ -511,21 +488,19 @@ void loop()
     
     // Color to match EAQI (https://coolors.co/50f0e6-50ccaa-f0e641-ff5050-960032-7d2181)
     eyes.clear();
-    if (pm25 >= 75 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.setPixelColor(0, eyes.Color(150,0,50)); } else // Extremely poor
+    if (pm25 >= 75 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.setPixelColor(0, eyes.Color(125,33,129); } else // Extremely poor
     if (pm25 >= 50 && pm25 <  75 || pm10 >= 100 && pm10 <  150) { eyes.setPixelColor(0, eyes.Color(150,0,50)); } else // Very poor
     if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eyes.setPixelColor(0, eyes.Color(255,80,80)); } else // Poor
-    if (pm25 >= 20 && pm25 <  25 || pm10 >=  40 && pm10 <   50) { eyes.setPixelColor(0, eyes.Color(240,230,35)); }else // Moderate
+    if (pm25 >= 20 && pm25 <  25 || pm10 >=  40 && pm10 <   50) { eyes.setPixelColor(0, eyes.Color(240,230,65)); } else // Moderate
     if (pm25 >= 10 && pm25 <  20 || pm10 >=  20 && pm10 <   40) { eyes.setPixelColor(0, eyes.Color(80,204,170)); } else // Fair
-    if (pm25 >=  0 && pm25 <  10 || pm10 >=   0 && pm10 <   20) { eyes.setPixelColor(0, eyes.Color(80,240,230)); }// Good
+    if (pm25 >=  0 && pm25 <  10 || pm10 >=   0 && pm10 <   20) { eyes.setPixelColor(0, eyes.Color(80,240,230)); } // Good
     eyes.show();
     //
 
     while (millis() - loop_ts < 60000L) { delay(1000); } // sleep until full minute
     loops++;    
 
-    ////////////////////////////////////
-    //if (loops == 3) loops = 0; 
-    ////////////////////////////////////
+    //if (loops == 3) loops = 0; // DEBUG ONLY
 
     eyes.setPixelColor(0, eyes.Color(255,255,255)); eyes.show(); delay(250); eyes.clear(); eyes.show();
 }
