@@ -488,7 +488,7 @@ void loop()
     
     // Color to match EAQI (https://coolors.co/50f0e6-50ccaa-f0e641-ff5050-960032-7d2181)
     eyes.clear();
-    if (pm25 >= 75 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.setPixelColor(0, eyes.Color(125,33,129); } else // Extremely poor
+    if (pm25 >= 75 && pm25 < 800 || pm10 >= 100 && pm10 < 1200) { eyes.setPixelColor(0, eyes.Color(125,33,129)); } else // Extremely poor
     if (pm25 >= 50 && pm25 <  75 || pm10 >= 100 && pm10 <  150) { eyes.setPixelColor(0, eyes.Color(150,0,50)); } else // Very poor
     if (pm25 >= 25 && pm25 <  50 || pm10 >=  50 && pm10 <  100) { eyes.setPixelColor(0, eyes.Color(255,80,80)); } else // Poor
     if (pm25 >= 20 && pm25 <  25 || pm10 >=  40 && pm10 <   50) { eyes.setPixelColor(0, eyes.Color(240,230,65)); } else // Moderate
