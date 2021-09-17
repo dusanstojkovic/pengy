@@ -51,9 +51,16 @@ CubeCell_NeoPixel eyes(1, RGB, NEO_GRB + NEO_KHZ800);
 #define DEBUG true
 #define LOG if(DEBUG)Serial
 
+// ABP
 static const uint8_t NWKSKEY[16] = NWK_S_KEY;
 static const uint8_t APPSKEY[16] = APP_S_KEY;
 static const uint32_t DEVADDR = DEV_ADDR;
+
+// OTAA
+static uint8_t devEui[] = DEV_EUI;
+static uint8_t appEui[] = APP_EUI;
+static uint8_t appKey[] = APP_KEY;
+
 uint16_t userChannelsMask[6]={ 0x00FF,0x0000,0x0000,0x0000,0x0000,0x0000 };
 
 unsigned int loops = 0;
@@ -391,8 +398,13 @@ void setup()
     boardInitMcu();
     LoRaWAN.begin(LORAWAN_CLASS, ACTIVE_REGION);
     LoRaWAN.setAdaptiveDR(true);
+    Serial << F("OK") << endl;
+
+    // ABP
+    /*
+    Serial << F("  joining (ABP)... ");
     bool joined = LoRaWAN.joinABP((uint8_t*)NWKSKEY, (uint8_t*)APPSKEY, DEVADDR);
-	
+    
     // workaround to set NetId
     MibRequestConfirm_t mibReq;
 	mibReq.Type = MIB_NET_ID;
@@ -400,6 +412,16 @@ void setup()
 	LoRaMacMibSetRequestConfirm(&mibReq);
     
     Serial << (joined ? F("OK") : F("NOK")) << endl;
+	*/
+
+    // OTAA
+    bool joined = false;
+    while (!joined) {
+        Serial << F("  joining (OTAA)... ");
+        joined = LoRaWAN.joinOTAA(appEui, appKey, devEui);
+        Serial << (joined ? F("OK") : F("Failed - repeating in 1 min")) << endl;
+        if (!joined) delay(60000);
+    }
 
     // LED out
     lightInit();
