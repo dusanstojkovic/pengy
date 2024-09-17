@@ -267,7 +267,7 @@ void acquireTHP()
     pressure    = CAL_PRESSURE_1    * pressure    + CAL_PRESSURE_0;    
 }
 
-void acquirePM()
+void acquirePM(bool clean)
 {
     LOG << endl << F("PM >>>") << endl;
     
@@ -275,6 +275,12 @@ void acquirePM()
 
     bool began = sps30.beginMeasuring();
     LOG << (began ? F("+"):F("-")) << endl;
+    
+    if (clean)
+    {
+        LOG << F("Performin manual cleaning") << endl;
+        sps30.sendCommand(COMMAND_START_FAN_CLEANING);
+    }
 
     delay(30000);
 
@@ -450,7 +456,8 @@ void loop()
 
     if (loops % 10 == 0) // every 10 minutes - sample particulates
     {
-        acquirePM();
+        bool cleaning = loops % 10080 == 0; // clean once a week
+        acquirePM(cleaning);
         Serial << F("PM ") << F(" 1.0=") << pm1 << F("µg/m³  2.5=") << pm25 << F("µg/m³  4.0=") << 0 << F("µg/m³  10=") << pm10 << F("µg/m³") << endl;        
     }
 

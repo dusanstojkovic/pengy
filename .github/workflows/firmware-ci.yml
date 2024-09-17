@@ -39,4 +39,4 @@ jobs:
 
     - name: Run PlatformIO
       working-directory: firmware
-      run: pio run -e v2.0
+      run: pio run -e v2.1
