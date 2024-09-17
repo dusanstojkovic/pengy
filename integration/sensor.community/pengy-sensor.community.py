@@ -16,48 +16,51 @@ import numpy as np
 with open("pengy-sensor.community.yml", 'r') as ymlfile:
 	config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
-# logstash config
-logstash_host = config['logstash']['host']
-logstash_port = 443
-logstash_username = config['logstash']['username']
-logstash_password = config['logstash']['password']
-logstash_environment= config['logstash']['environment']
-logstash_log_level = config['logstash']['log_level']
-
 # logging config
 logging.basicConfig(
-	level=logstash_log_level,
+	level=config['log_level'],
 	format='%(asctime)s [%(levelname)-8s] #%(lineno)03d / %(funcName)s / (%(threadName)-10s) %(message)s',
 )
+log = logging.getLogger()
 
-# remote logging set-up
-log = logging.getLogger("stash")
-log.setLevel(logstash_log_level)
+if config.get("logstash") is not None:
 
-transport = HttpTransport(
-    host=logstash_host,
-    port=logstash_port,
-    ssl_enable=True,
-    ssl_verify=True,
-    timeout=5.0,
-    username=logstash_username,
-    password=logstash_password)
+	# logstash config
+	logstash_host = config['logstash']['host']
+	logstash_port = 443
+	logstash_username = config['logstash']['username']
+	logstash_password = config['logstash']['password']
+	logstash_environment= config['logstash']['environment']
+	logstash_log_level = config['log_level']
 
-handler = AsynchronousLogstashHandler(
-    host=logstash_host,
-    port=logstash_port,
-	transport=transport,
-    database_path='log-stash.db')
+	# remote logging set-up
+	log = logging.getLogger("stash")
+	log.setLevel(logstash_log_level)
 
-formatter = LogstashFormatter(
-	extra={
-		'application': "pengy",
-		'component': "sensor.community",
-		'environment': logstash_environment})
+	transport = HttpTransport(
+		host=logstash_host,
+		port=logstash_port,
+		ssl_enable=True,
+		ssl_verify=True,
+		timeout=5.0,
+		username=logstash_username,
+		password=logstash_password)
 
-handler.setFormatter(formatter)
+	handler = AsynchronousLogstashHandler(
+		host=logstash_host,
+		port=logstash_port,
+		transport=transport,
+		database_path='log-stash.db')
 
-log.addHandler(handler)
+	formatter = LogstashFormatter(
+		extra={
+			'application': "pengy",
+			'component': "sensor.community",
+			'environment': logstash_environment})
+
+	handler.setFormatter(formatter)
+
+	log.addHandler(handler)
 
 # ttn config
 ttn_mqtt_broker = config['ttn_mqtt']['server']
@@ -194,12 +197,19 @@ def ttn_on_message(client, userdata, message):
 			aq[uid] = pd.DataFrame(data = {"rpm": [], "fpm": [], "upm": [], "tem": [], "hum": []}, index = [])
 			ver[uid] = version
 
-		aq[uid] = aq[uid].append(pd.DataFrame(
+		if not aq[uid].empty:
+			aq[uid] = pd.concat( [ aq[uid], pd.DataFrame(
 				data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
 						"rpm" : [rpm or np.nan], "fpm" : [fpm or np.nan], "upm" : [upm or np.nan]},
-				index = [datetime.datetime.now()]))
-
-		aq[uid] = aq[uid].last('24h')
+				index = [datetime.datetime.now()]) ])
+		else:
+			aq[uid] = pd.DataFrame(
+				data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
+						"rpm" : [rpm or np.nan], "fpm" : [fpm or np.nan], "upm" : [upm or np.nan]},
+				index = [datetime.datetime.now()])
+			
+		time_range = pd.Timestamp.now() - pd.Timedelta('24h')
+		aq[uid] = aq[uid].loc[time_range:]
 
 	except Exception as ex:
 		log.error('MQTT (TTN) * On Message - Error : %s' % str(ex), exc_info=True)

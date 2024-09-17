@@ -1,15 +1,17 @@
 sensor_community:
-  software_version: 'pengy v2.0'
+  software_version: 'pengy v2.1'
 
 ttn_mqtt:
   server: eu1.cloud.thethings.network
   port: 8883
   username: pengy@ttn
   password: XXXXX.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY.ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+  
+log_level: INFO
 
 logstash:
   host: logstash.elastic.sting.dev
   username: '??????????'
   password: '??????????'
   environment: dev/test/live
-  log_level: INFO
+

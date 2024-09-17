@@ -16,47 +16,50 @@ import numpy as np
 with open("pengy-pulse.eco.yml", 'r') as ymlfile:
 	config = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
-# logstash config
-logstash_host = config['logstash']['host']
-logstash_port = 443
-logstash_username = config['logstash']['username']
-logstash_password = config['logstash']['password']
-logstash_environment= config['logstash']['environment']
-logstash_log_level = config['logstash']['log_level']
-
 # logging config
 logging.basicConfig(
-	level=logstash_log_level,
+	level=config['log_level'],
 	format='%(asctime)s [%(levelname)-8s] #%(lineno)03d / %(funcName)s / (%(threadName)-10s) %(message)s',
 )
+log = logging.getLogger()
 
-# remote logging set-up
-log = logging.getLogger("stash")
-log.setLevel(logstash_log_level)
+if config.get("logstash") is not None:
 
-transport = HttpTransport(
-    host=logstash_host,
-    port=logstash_port,
-    ssl_enable=True,
-    ssl_verify=True,
-    timeout=5.0,
-    username=logstash_username,
-    password=logstash_password)
+	# logstash config
+	logstash_host = config['logstash']['host']
+	logstash_port = 443
+	logstash_username = config['logstash']['username']
+	logstash_password = config['logstash']['password']
+	logstash_environment= config['logstash']['environment']
+	logstash_log_level = config['log_level']
 
-handler = AsynchronousLogstashHandler(
-    host=logstash_host,
-    port=logstash_port,
-	transport=transport,
-    database_path='log-stash.db')
+	# remote logging set-up
+	log = logging.getLogger("stash")
+	log.setLevel(logstash_log_level)
 
-formatter = LogstashFormatter(
-	extra={
-		'application': "pengy",
-		'component': "pulse.eco",
-		'environment': logstash_environment})
-handler.setFormatter(formatter)
+	transport = HttpTransport(
+		host=logstash_host,
+		port=logstash_port,
+		ssl_enable=True,
+		ssl_verify=True,
+		timeout=5.0,
+		username=logstash_username,
+		password=logstash_password)
 
-log.addHandler(handler)
+	handler = AsynchronousLogstashHandler(
+		host=logstash_host,
+		port=logstash_port,
+		transport=transport,
+		database_path='log-stash.db')
+
+	formatter = LogstashFormatter(
+		extra={
+			'application': "pengy",
+			'component': "pulse.eco",
+			'environment': logstash_environment})
+	handler.setFormatter(formatter)
+
+	log.addHandler(handler)
 
 # ttn config
 ttn_mqtt_broker = config['ttn_mqtt']['server']
@@ -161,7 +164,6 @@ def sendPulseEco():
 	
 	return
 
-
 def ttn_on_connect(client, userdata, flags, rc):
 	log.info('MQTT (TTN) * On Connect - Result: ' + paho.mqtt.client.connack_string(rc))
 	ttn_mqtt_client.subscribe("v3/pengy@ttn/devices/+/up", 0)
@@ -215,14 +217,23 @@ def ttn_on_message(client, userdata, message):
 			aq[uid] = pd.DataFrame(data = {"tem": [], "hum": [], "pre": [], "pm1": [], "pm25": [], "pm10": [], "no2": [], "co": [], "nh3": [], "noi": []}, index = [])
 			al[uid] = alt
 
-		aq[uid] = aq[uid].append(pd.DataFrame(
-				data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
-						"pm1" : [pm1 or np.nan], "pm25" : [pm25 or np.nan], "pm10" : [pm10 or np.nan], 
-						"no2" : [no2 or np.nan], "co"  : [co or np.nan], "nh3" : [nh3 or np.nan],
-						"noi" : [noi or np.nan]},
-				index = [datetime.datetime.now()]))
-
-		aq[uid] = aq[uid].last('24h')
+		if not aq[uid].empty:
+			aq[uid] = pd.concat( [ aq[uid], pd.DataFrame(
+					data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
+							"pm1" : [pm1 or np.nan], "pm25" : [pm25 or np.nan], "pm10" : [pm10 or np.nan], 
+							"no2" : [no2 or np.nan], "co"  : [co or np.nan], "nh3" : [nh3 or np.nan],
+							"noi" : [noi or np.nan]},
+					index = [datetime.datetime.now()]) ])
+		else:
+			aq[uid] = pd.DataFrame(
+					data = {"tem" : [tem or np.nan], "hum" : [hum or np.nan], "pre" : [pre or np.nan],
+							"pm1" : [pm1 or np.nan], "pm25" : [pm25 or np.nan], "pm10" : [pm10 or np.nan], 
+							"no2" : [no2 or np.nan], "co"  : [co or np.nan], "nh3" : [nh3 or np.nan],
+							"noi" : [noi or np.nan]},
+					index = [datetime.datetime.now()])
+			
+		time_range = pd.Timestamp.now() - pd.Timedelta('24h')
+		aq[uid] = aq[uid].loc[time_range:]
 
 	except Exception as ex:
 		log.error('MQTT (TTN) * On Message - Error : %s' % str(ex), exc_info=True)
