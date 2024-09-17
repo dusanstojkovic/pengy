@@ -103,14 +103,14 @@ def sendSensorCommunity():
 		uids_naned = []
 
 		for uid in uids:
-			aq[uid] = aq[uid].append(pd.DataFrame(
+			aq[uid] = pd.concat([aq[uid], pd.DataFrame(
 				data = {"rpm": [np.nan],
 						"fpm": [np.nan], 
 						"upm": [np.nan], 
 						"tem": [np.nan],
 						"hum": [np.nan],
 						"pre": [np.nan]},
-				index = [datetime.datetime.now()]))
+				index = [datetime.datetime.now()]) ])
 			
 			aq_ = aq[uid].rolling('30min').median()
 			rpm = round(aq_.rpm.iat[-1],0)

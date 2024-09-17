@@ -87,7 +87,7 @@ def sendPulseEco():
 		uids_naned = []
 
 		for uid in uids:
-			aq[uid] = aq[uid].append(pd.DataFrame(
+			aq[uid] = pd.concat([aq[uid], pd.DataFrame(
 				data = {"pm1": [np.nan],
 						"pm25": [np.nan], 
 						"pm10": [np.nan], 						
@@ -98,7 +98,7 @@ def sendPulseEco():
 						"co": [np.nan],
 						"nh3": [np.nan],
 						"noi": [np.nan]},
-				index = [datetime.datetime.now()]))
+				index = [datetime.datetime.now()]) ])
 			
 			aq_ = aq[uid].rolling('30min').median()
 			pm1  = round(aq_.pm1.iat[-1],0)
